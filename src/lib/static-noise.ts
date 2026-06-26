@@ -1,50 +1,80 @@
-// White-noise "tuning in" effect using WebAudio.
-// Must be created from a user gesture (click) to satisfy autoplay policies.
+// "Tuning in" static effect.
+// Uses an HTMLAudioElement playing a generated WAV blob — works reliably
+// inside sandboxed iframes (Lovable preview) where WebAudio can be muted.
 
 export type StaticHandle = {
-  ctx: AudioContext;
   stop: () => void;
   fadeOut: (seconds: number) => void;
 };
 
-export function startStatic(volume = 0.25): StaticHandle {
-  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new Ctx();
-  if (ctx.state === "suspended") ctx.resume().catch(() => {});
-  const bufLen = ctx.sampleRate * 2;
-  const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < bufLen; i++) {
-    data[i] = (Math.random() * 2 - 1) * 0.7 + (Math.random() * 2 - 1) * 0.3;
+function buildNoiseWav(seconds = 2, sampleRate = 22050, volume = 0.7): Blob {
+  const numSamples = Math.floor(seconds * sampleRate);
+  const bytesPerSample = 2;
+  const dataSize = numSamples * bytesPerSample;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buf);
+  const writeStr = (o: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true); // PCM chunk size
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * bytesPerSample, true);
+  view.setUint16(32, bytesPerSample, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, dataSize, true);
+  let last = 0;
+  for (let i = 0; i < numSamples; i++) {
+    // pinkish noise: low-pass a bit so it sounds like radio fuzz, not harsh hiss
+    const w = Math.random() * 2 - 1;
+    last = last * 0.6 + w * 0.4;
+    const s = Math.max(-1, Math.min(1, last * volume));
+    view.setInt16(44 + i * 2, s * 0x7fff, true);
   }
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.loop = true;
+  return new Blob([buf], { type: "audio/wav" });
+}
 
-  const filter = ctx.createBiquadFilter();
-  filter.type = "bandpass";
-  filter.frequency.value = 1800;
-  filter.Q.value = 0.9;
+let cachedUrl: string | null = null;
+function noiseUrl(): string {
+  if (cachedUrl) return cachedUrl;
+  cachedUrl = URL.createObjectURL(buildNoiseWav(2, 22050, 0.8));
+  return cachedUrl;
+}
 
-  const gain = ctx.createGain();
-  gain.gain.value = volume;
-
-  src.connect(filter).connect(gain).connect(ctx.destination);
-  src.start();
+export function startStatic(volume = 0.5): StaticHandle {
+  const audio = new Audio(noiseUrl());
+  audio.loop = true;
+  audio.volume = volume;
+  audio.preload = "auto";
+  // play() returns a promise — swallow rejections (already handled at call site)
+  const p = audio.play();
+  if (p && typeof p.catch === "function") p.catch((e) => console.warn("[static] play blocked:", e));
 
   let stopped = false;
   const stop = () => {
     if (stopped) return;
     stopped = true;
-    try { src.stop(); } catch { /* noop */ }
-    setTimeout(() => ctx.close().catch(() => {}), 50);
+    try { audio.pause(); audio.src = ""; } catch { /* noop */ }
   };
   const fadeOut = (seconds: number) => {
-    const t = ctx.currentTime;
-    gain.gain.cancelScheduledValues(t);
-    gain.gain.setValueAtTime(gain.gain.value, t);
-    gain.gain.linearRampToValueAtTime(0.0001, t + seconds);
-    setTimeout(stop, seconds * 1000 + 100);
+    const startVol = audio.volume;
+    const steps = 20;
+    const stepMs = (seconds * 1000) / steps;
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      audio.volume = Math.max(0, startVol * (1 - i / steps));
+      if (i >= steps) {
+        clearInterval(id);
+        stop();
+      }
+    }, stepMs);
   };
-  return { ctx, stop, fadeOut };
+  return { stop, fadeOut };
 }
