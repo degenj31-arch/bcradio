@@ -75,8 +75,17 @@ function StationPage() {
     setCurrent(head.song);
     const url = await getPlayableUrl(head.song.audio_url);
     if (stoppedRef.current) return;
-    if (audio.src !== url) audio.src = url;
-    audio.currentTime = head.offset;
+    if (audio.src !== url) {
+      audio.src = url;
+      // Wait for metadata so currentTime assignment sticks
+      await new Promise<void>((res) => {
+        const ok = () => { audio.removeEventListener("loadedmetadata", ok); res(); };
+        if (audio.readyState >= 1) res();
+        else audio.addEventListener("loadedmetadata", ok);
+        setTimeout(res, 4000);
+      });
+    }
+    try { audio.currentTime = head.offset; } catch { /* noop */ }
     audio.volume = muted ? 0 : 0.9;
     await audio.play();
     setPlaying(true);
