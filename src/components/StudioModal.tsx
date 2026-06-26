@@ -61,18 +61,26 @@ export function StudioModal({ open, onClose }: Props) {
 
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedId) return;
+    if (!selectedId) { toast.error("Pick a station first"); return; }
     const form = e.currentTarget;
     const fd = new FormData(form);
-    const file = fd.get("file") as File;
+    const file = fd.get("file") as File | null;
     const title = String(fd.get("title") || "").trim();
     const artist = String(fd.get("artist") || "").trim() || null;
-    if (!file || !title) return toast.error("File and title required");
+    if (!file || !file.size) return toast.error("Please choose a file");
+    if (!title) return toast.error("Title required");
     setLoading(true);
     try {
-      toast.message("Reading file…");
-      const duration = await extractDuration(file);
-      toast.message("Uploading…");
+      toast.message(`Reading "${file.name}"…`);
+      let duration = 0;
+      try {
+        duration = await extractDuration(file);
+      } catch (err) {
+        console.error("[duration]", err);
+        toast.error("Could not read media length — using 60s. Edit later if needed.");
+        duration = 60;
+      }
+      toast.message("Uploading to cloud…");
       const path = await uploadAudio(file);
       const nextPos = (selectedSongs[selectedSongs.length - 1]?.position ?? -1) + 1;
       const { error } = await supabase.from("songs").insert({
@@ -80,10 +88,11 @@ export function StudioModal({ open, onClose }: Props) {
         duration_seconds: duration, position: nextPos,
       });
       if (error) throw error;
-      toast.success(`Added "${title}" (${fmtTime(duration)})`);
+      toast.success(`✓ Added "${title}" (${fmtTime(duration)})`);
       form.reset();
-      refresh(selectedId);
+      await refresh(selectedId);
     } catch (err) {
+      console.error("[upload]", err);
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setLoading(false);
