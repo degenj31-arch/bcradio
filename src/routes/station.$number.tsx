@@ -75,8 +75,17 @@ function StationPage() {
     setCurrent(head.song);
     const url = await getPlayableUrl(head.song.audio_url);
     if (stoppedRef.current) return;
-    if (audio.src !== url) audio.src = url;
-    audio.currentTime = head.offset;
+    if (audio.src !== url) {
+      audio.src = url;
+      // Wait for metadata so currentTime assignment sticks
+      await new Promise<void>((res) => {
+        const ok = () => { audio.removeEventListener("loadedmetadata", ok); res(); };
+        if (audio.readyState >= 1) res();
+        else audio.addEventListener("loadedmetadata", ok);
+        setTimeout(res, 4000);
+      });
+    }
+    try { audio.currentTime = head.offset; } catch { /* noop */ }
     audio.volume = muted ? 0 : 0.9;
     await audio.play();
     setPlaying(true);
@@ -88,19 +97,25 @@ function StationPage() {
     setNeedsGesture(false);
     setTuning(true);
     setError(null);
-    try { staticRef.current = startStatic(0.25); } catch { staticRef.current = null; }
+    try {
+      staticRef.current = startStatic(0.5);
+    } catch (e) {
+      console.warn("static failed", e);
+      staticRef.current = null;
+    }
 
-    await new Promise((r) => setTimeout(r, 1800));
+    await new Promise((r) => setTimeout(r, 2000));
     if (stoppedRef.current) return;
 
     if (songs.length) {
       try {
         await syncAndPlay();
       } catch (e) {
+        console.error("playback error", e);
         setError(e instanceof Error ? e.message : "Playback failed");
       }
     }
-    staticRef.current?.fadeOut(0.6);
+    staticRef.current?.fadeOut(0.8);
     setTuning(false);
   }, [station, songs, syncAndPlay]);
 
