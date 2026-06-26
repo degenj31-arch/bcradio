@@ -111,8 +111,8 @@ function Home() {
         )}
       </div>
 
-      <footer className="mt-12 text-center text-xs font-mono text-muted-foreground">
-        ⟨ tap the title to enter the studio ⟩
+      <footer className="mt-12 text-center text-xs font-mono text-muted-foreground opacity-60">
+        © BCradio · {new Date().getFullYear()}
       </footer>
 
       <StudioModal open={studioOpen} onClose={() => setStudioOpen(false)} />
