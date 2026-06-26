@@ -7,25 +7,24 @@ export type StaticHandle = {
   fadeOut: (seconds: number) => void;
 };
 
-export function startStatic(volume = 0.12): StaticHandle {
+export function startStatic(volume = 0.25): StaticHandle {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new Ctx();
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
   const bufLen = ctx.sampleRate * 2;
   const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
   const data = buf.getChannelData(0);
   for (let i = 0; i < bufLen; i++) {
-    // Pink-ish noise — softer than pure white
     data[i] = (Math.random() * 2 - 1) * 0.7 + (Math.random() * 2 - 1) * 0.3;
   }
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.loop = true;
 
-  // Bandpass for radio-static feel
   const filter = ctx.createBiquadFilter();
   filter.type = "bandpass";
   filter.frequency.value = 1800;
-  filter.Q.value = 0.7;
+  filter.Q.value = 0.9;
 
   const gain = ctx.createGain();
   gain.gain.value = volume;
