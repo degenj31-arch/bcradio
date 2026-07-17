@@ -1,0 +1,1 @@
+ALTER TABLE public.songs ADD COLUMN IF NOT EXISTS youtube_id text; ALTER TABLE public.songs ALTER COLUMN audio_url DROP NOT NULL;

@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Station } from "@/lib/radio";
 import { StudioModal } from "@/components/StudioModal";
-import { Radio } from "lucide-react";
+import { isOffAir, formatOffAirWindow } from "@/lib/youtube";
+import { Radio, Moon } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -53,8 +54,14 @@ function Home() {
           </h1>
         </button>
         <p className="mt-3 text-muted-foreground text-sm md:text-base font-mono tracking-wide">
-          ON AIR · BROADCASTING WORLDWIDE · {new Date().getFullYear()}
+          {isOffAir() ? "OFF AIR · SILENT HOURS" : "ON AIR · BROADCASTING WORLDWIDE"} · {new Date().getFullYear()}
         </p>
+        <div className={`mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono border ${
+          isOffAir() ? "border-amber/40 bg-amber/10 text-amber" : "border-border text-muted-foreground"
+        }`}>
+          <Moon className="w-3.5 h-3.5" />
+          <span>Silent hours: {formatOffAirWindow()}</span>
+        </div>
       </header>
 
       <div className="panel p-6 md:p-10">

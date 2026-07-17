@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { extractDuration, uploadAudio, fmtTime } from "@/lib/radio";
+import { parseYouTubeId, fetchYouTubeDuration, formatOffAirWindow } from "@/lib/youtube";
 import type { Station, Song } from "@/lib/radio";
-import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save } from "lucide-react";
+import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube } from "lucide-react";
 import { toast } from "sonner";
 
 type Props = { open: boolean; onClose: () => void };
@@ -59,7 +60,7 @@ export function StudioModal({ open, onClose }: Props) {
     setMobileShowEditor(true);
   };
 
-  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFileUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedId) { toast.error("Pick a station first"); return; }
     const form = e.currentTarget;
@@ -73,9 +74,8 @@ export function StudioModal({ open, onClose }: Props) {
     try {
       toast.message(`Reading "${file.name}"…`);
       let duration = 0;
-      try {
-        duration = await extractDuration(file);
-      } catch (err) {
+      try { duration = await extractDuration(file); }
+      catch (err) {
         console.error("[duration]", err);
         toast.error("Could not read media length — using 60s. Edit later if needed.");
         duration = 60;
@@ -84,7 +84,7 @@ export function StudioModal({ open, onClose }: Props) {
       const path = await uploadAudio(file);
       const nextPos = (selectedSongs[selectedSongs.length - 1]?.position ?? -1) + 1;
       const { error } = await supabase.from("songs").insert({
-        station_id: selectedId, title, artist, audio_url: path,
+        station_id: selectedId, title, artist, audio_url: path, youtube_id: null,
         duration_seconds: duration, position: nextPos,
       });
       if (error) throw error;
@@ -94,9 +94,43 @@ export function StudioModal({ open, onClose }: Props) {
     } catch (err) {
       console.error("[upload]", err);
       toast.error(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
+  };
+
+  const handleYouTubeAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedId) { toast.error("Pick a station first"); return; }
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const url = String(fd.get("url") || "").trim();
+    const title = String(fd.get("title") || "").trim();
+    const artist = String(fd.get("artist") || "").trim() || null;
+    const videoId = parseYouTubeId(url);
+    if (!videoId) return toast.error("Paste a valid YouTube URL (e.g. https://youtu.be/…)");
+    if (!title) return toast.error("Title required");
+    setLoading(true);
+    try {
+      toast.message("Reading video length from YouTube…");
+      let duration = 0;
+      try { duration = await fetchYouTubeDuration(videoId); }
+      catch (err) {
+        console.error("[yt-duration]", err);
+        toast.error("Could not read length — using 180s. Edit later if needed.");
+        duration = 180;
+      }
+      const nextPos = (selectedSongs[selectedSongs.length - 1]?.position ?? -1) + 1;
+      const { error } = await supabase.from("songs").insert({
+        station_id: selectedId, title, artist, audio_url: null, youtube_id: videoId,
+        duration_seconds: duration, position: nextPos,
+      });
+      if (error) throw error;
+      toast.success(`✓ Added "${title}" (${fmtTime(duration)})`);
+      form.reset();
+      await refresh(selectedId);
+    } catch (err) {
+      console.error("[yt-add]", err);
+      toast.error(err instanceof Error ? err.message : "Failed to add");
+    } finally { setLoading(false); }
   };
 
   const updateSong = async (id: string, patch: Partial<Song>) => {
@@ -107,7 +141,9 @@ export function StudioModal({ open, onClose }: Props) {
 
   const deleteSong = async (s: Song) => {
     if (!confirm(`Delete "${s.title}"?`)) return;
-    await supabase.storage.from("radio-audio").remove([s.audio_url]).catch(() => {});
+    if (s.audio_url) {
+      await supabase.storage.from("radio-audio").remove([s.audio_url]).catch(() => {});
+    }
     const { error } = await supabase.from("songs").delete().eq("id", s.id);
     if (error) return toast.error(error.message);
     refresh(selectedId);
@@ -144,10 +180,12 @@ export function StudioModal({ open, onClose }: Props) {
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Manage stations, upload songs, set the order broadcast worldwide.
             </p>
+            <p className="text-[11px] font-mono text-muted-foreground mt-2">
+              Off-air window: {formatOffAirWindow()} — only static plays; broadcast resumes automatically.
+            </p>
           </div>
 
           <div className="grid md:grid-cols-[260px_1fr] gap-0 min-h-[500px]">
-            {/* Sidebar */}
             <aside className={`${mobileShowEditor ? "hidden" : "block"} md:block border-r border-border p-3 sm:p-4 space-y-2`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs uppercase tracking-widest text-muted-foreground">Stations</span>
@@ -172,7 +210,6 @@ export function StudioModal({ open, onClose }: Props) {
               ))}
             </aside>
 
-            {/* Editor */}
             <section className={`${mobileShowEditor ? "block" : "hidden"} md:block p-4 sm:p-6 space-y-6`}>
               <button
                 onClick={() => setMobileShowEditor(false)}
@@ -193,7 +230,8 @@ export function StudioModal({ open, onClose }: Props) {
                     onClose();
                     navigate({ to: "/station/$number", params: { number: String(Number(selected.number)) } });
                   }}
-                  onUpload={handleUpload}
+                  onFileUpload={handleFileUpload}
+                  onYouTubeAdd={handleYouTubeAdd}
                   uploading={loading}
                   onUpdateSong={updateSong}
                   onDeleteSong={deleteSong}
@@ -209,7 +247,7 @@ export function StudioModal({ open, onClose }: Props) {
 }
 
 function StationEditor({
-  station, songs, onSaved, onDelete, onTuneIn, onUpload, uploading,
+  station, songs, onSaved, onDelete, onTuneIn, onFileUpload, onYouTubeAdd, uploading,
   onUpdateSong, onDeleteSong, onMoveSong,
 }: {
   station: Station;
@@ -217,7 +255,8 @@ function StationEditor({
   onSaved: (id: string) => void;
   onDelete: () => void;
   onTuneIn: () => void;
-  onUpload: (e: React.FormEvent<HTMLFormElement>) => void;
+  onFileUpload: (e: React.FormEvent<HTMLFormElement>) => void;
+  onYouTubeAdd: (e: React.FormEvent<HTMLFormElement>) => void;
   uploading: boolean;
   onUpdateSong: (id: string, patch: Partial<Song>) => void;
   onDeleteSong: (s: Song) => void;
@@ -229,6 +268,7 @@ function StationEditor({
   const [color, setColor] = useState(station.color);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<"youtube" | "file">("youtube");
 
   const mark = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
 
@@ -251,76 +291,91 @@ function StationEditor({
     <>
       <div className="grid sm:grid-cols-2 gap-3">
         <Field label="Frequency (e.g. 98.7)">
-          <input
-            type="number" step="0.1" value={number}
+          <input type="number" step="0.1" value={number}
             onChange={(e) => mark(setNumber)(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono"
-          />
+            className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono" />
         </Field>
         <Field label="Name">
-          <input
-            value={name}
-            onChange={(e) => mark(setName)(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2"
-          />
+          <input value={name} onChange={(e) => mark(setName)(e.target.value)}
+            className="w-full bg-input border border-border rounded-md px-3 py-2" />
         </Field>
         <Field label="Tagline">
-          <input
-            value={tagline}
-            onChange={(e) => mark(setTagline)(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2"
-          />
+          <input value={tagline} onChange={(e) => mark(setTagline)(e.target.value)}
+            className="w-full bg-input border border-border rounded-md px-3 py-2" />
         </Field>
         <Field label="Dial Color">
-          <input
-            type="color" value={color}
-            onChange={(e) => mark(setColor)(e.target.value)}
-            className="w-full h-10 bg-input border border-border rounded-md"
-          />
+          <input type="color" value={color} onChange={(e) => mark(setColor)(e.target.value)}
+            className="w-full h-10 bg-input border border-border rounded-md" />
         </Field>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button
-          onClick={save}
-          disabled={!dirty || saving}
-          className="px-4 py-2 rounded-md bg-amber text-primary-foreground hover:opacity-90 text-sm flex items-center gap-2 disabled:opacity-50"
-        >
+        <button onClick={save} disabled={!dirty || saving}
+          className="px-4 py-2 rounded-md bg-amber text-primary-foreground hover:opacity-90 text-sm flex items-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {dirty ? "Save Changes" : "Saved"}
         </button>
-        <button
-          onClick={onTuneIn}
-          className="px-3 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm"
-        >Tune In →</button>
-        <button
-          onClick={onDelete}
-          className="px-3 py-2 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 text-sm flex items-center gap-1"
-        >
+        <button onClick={onTuneIn}
+          className="px-3 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm">Tune In →</button>
+        <button onClick={onDelete}
+          className="px-3 py-2 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 text-sm flex items-center gap-1">
           <Trash2 className="w-4 h-4" /> Delete
         </button>
       </div>
 
       <hr className="border-border" />
 
-      <form onSubmit={onUpload} className="space-y-3">
-        <div className="text-xs uppercase tracking-widest text-muted-foreground">Add Song</div>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <input name="title" placeholder="Song title" required
-            className="bg-input border border-border rounded-md px-3 py-2" />
-          <input name="artist" placeholder="Artist (optional)"
-            className="bg-input border border-border rounded-md px-3 py-2" />
+      <div>
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Add Song</div>
+        <div className="flex gap-2 mb-3">
+          <button type="button" onClick={() => setTab("youtube")}
+            className={`px-3 py-1.5 rounded-md text-sm flex items-center gap-1.5 ${
+              tab === "youtube" ? "bg-amber text-primary-foreground" : "bg-accent text-muted-foreground"
+            }`}>
+            <Youtube className="w-4 h-4" /> YouTube URL
+          </button>
+          <button type="button" onClick={() => setTab("file")}
+            className={`px-3 py-1.5 rounded-md text-sm flex items-center gap-1.5 ${
+              tab === "file" ? "bg-amber text-primary-foreground" : "bg-accent text-muted-foreground"
+            }`}>
+            <Upload className="w-4 h-4" /> Upload File
+          </button>
         </div>
-        <input name="file" type="file" accept="audio/*,video/*" required
-          className="block w-full text-sm file:mr-3 file:px-3 file:py-2 file:rounded-md file:border-0 file:bg-accent file:text-foreground" />
-        <button
-          disabled={uploading} type="submit"
-          className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60"
-        >
-          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-          {uploading ? "Uploading…" : "Upload & Add"}
-        </button>
-      </form>
+
+        {tab === "youtube" ? (
+          <form onSubmit={onYouTubeAdd} className="space-y-3">
+            <input name="url" placeholder="https://youtu.be/… or https://www.youtube.com/watch?v=…" required
+              className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input name="title" placeholder="Song title" required
+                className="bg-input border border-border rounded-md px-3 py-2" />
+              <input name="artist" placeholder="Artist (optional)"
+                className="bg-input border border-border rounded-md px-3 py-2" />
+            </div>
+            <button disabled={uploading} type="submit"
+              className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Youtube className="w-4 h-4" />}
+              {uploading ? "Adding…" : "Add from YouTube"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={onFileUpload} className="space-y-3">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input name="title" placeholder="Song title" required
+                className="bg-input border border-border rounded-md px-3 py-2" />
+              <input name="artist" placeholder="Artist (optional)"
+                className="bg-input border border-border rounded-md px-3 py-2" />
+            </div>
+            <input name="file" type="file" accept="audio/*,video/*" required
+              className="block w-full text-sm file:mr-3 file:px-3 file:py-2 file:rounded-md file:border-0 file:bg-accent file:text-foreground" />
+            <button disabled={uploading} type="submit"
+              className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {uploading ? "Uploading…" : "Upload & Add"}
+            </button>
+          </form>
+        )}
+      </div>
 
       <div>
         <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
@@ -329,7 +384,7 @@ function StationEditor({
         </div>
         <div className="space-y-1">
           {songs.length === 0 && (
-            <div className="text-sm text-muted-foreground py-4">No songs yet. Upload one above.</div>
+            <div className="text-sm text-muted-foreground py-4">No songs yet. Add one above.</div>
           )}
           {songs.map((s, i) => (
             <SongRow key={s.id} song={s} index={i}
@@ -365,6 +420,7 @@ function SongRow({ song, index, onMove, onDelete, onUpdate }: {
   return (
     <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 px-2 sm:px-3 py-2 rounded-md bg-card border border-border">
       <span className="font-mono text-xs text-muted-foreground w-6 shrink-0">{String(index + 1).padStart(2, "0")}</span>
+      {song.youtube_id && <Youtube className="w-3.5 h-3.5 text-red-500 shrink-0" aria-label="YouTube source" />}
       {edit ? (
         <>
           <input ref={titleRef} defaultValue={song.title} className="flex-1 min-w-0 bg-input border border-border rounded px-2 py-1 text-sm" />
