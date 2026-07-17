@@ -17,7 +17,7 @@ export type Database = {
       songs: {
         Row: {
           artist: string | null
-          audio_url: string
+          audio_url: string | null
           created_at: string
           duration_seconds: number
           id: string
@@ -25,10 +25,11 @@ export type Database = {
           station_id: string
           title: string
           updated_at: string
+          youtube_id: string | null
         }
         Insert: {
           artist?: string | null
-          audio_url: string
+          audio_url?: string | null
           created_at?: string
           duration_seconds: number
           id?: string
@@ -36,10 +37,11 @@ export type Database = {
           station_id: string
           title: string
           updated_at?: string
+          youtube_id?: string | null
         }
         Update: {
           artist?: string | null
-          audio_url?: string
+          audio_url?: string | null
           created_at?: string
           duration_seconds?: number
           id?: string
@@ -47,6 +49,7 @@ export type Database = {
           station_id?: string
           title?: string
           updated_at?: string
+          youtube_id?: string | null
         }
         Relationships: [
           {
