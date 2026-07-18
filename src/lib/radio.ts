@@ -78,3 +78,19 @@ export function fmtTime(sec: number): string {
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+
+export function fadeAudio(audio: HTMLAudioElement, from: number, to: number, ms: number) {
+  const steps = 20;
+  const step = ms / steps;
+  let i = 0;
+  const id = setInterval(() => {
+    i++;
+    try {
+      audio.volume = from + (to - from) * (i / steps);
+    } catch {
+      /* noop */
+    }
+    if (i >= steps) clearInterval(id);
+  }, step);
+}
+
