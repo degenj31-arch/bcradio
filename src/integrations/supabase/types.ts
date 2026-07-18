@@ -61,6 +61,64 @@ export type Database = {
           },
         ]
       }
+      station_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          nickname: string
+          station_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          nickname: string
+          station_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          nickname?: string
+          station_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "station_messages_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      station_sessions: {
+        Row: {
+          id: string
+          last_seen: string
+          station_id: string
+        }
+        Insert: {
+          id?: string
+          last_seen?: string
+          station_id: string
+        }
+        Update: {
+          id?: string
+          last_seen?: string
+          station_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "station_sessions_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stations: {
         Row: {
           color: string
