@@ -166,3 +166,20 @@ export function msUntilOffAir(d: Date = new Date()): number {
 export function formatOffAirWindow(): string {
   return "10:00 PM – 7:00 AM (your local time)";
 }
+
+export function fadeYouTubeVolume(player: YT.Player, from: number, to: number, ms: number) {
+  const steps = 20;
+  const step = ms / steps;
+  let i = 0;
+  const id = setInterval(() => {
+    i++;
+    const vol = Math.round(from + (to - from) * (i / steps));
+    try {
+      player.setVolume(vol);
+    } catch {
+      /* noop */
+    }
+    if (i >= steps) clearInterval(id);
+  }, step);
+}
+
