@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Station } from "@/lib/radio";
 import { StudioModal } from "@/components/StudioModal";
 import { isOffAir, formatOffAirWindow } from "@/lib/youtube";
-import { Radio, Moon } from "lucide-react";
+import { onInstallAvailability, promptInstall, isStandalone } from "@/lib/pwa";
+import { Radio, Moon, Download } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/")({
       { title: "BCradio — Synchronized Worldwide Radio" },
       { name: "description", content: "Tune into BCradio stations. Same song, same moment, anywhere on earth." },
       { property: "og:title", content: "BCradio" },
-      { property: "og:description", content: "Synchronized worldwide radio stations." },
+      { property: "og:description", content: "Synchronized worldwide radio stations by James Degenhardt." },
     ],
   }),
   component: Home,
@@ -22,21 +23,36 @@ function Home() {
   const [stations, setStations] = useState<Station[]>([]);
   const [studioOpen, setStudioOpen] = useState(false);
   const [titleTaps, setTitleTaps] = useState(0);
+  const [canInstall, setCanInstall] = useState(false);
+  const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
     supabase.from("stations").select("*").order("number")
       .then(({ data }) => setStations(data ?? []));
   }, [studioOpen]);
 
-  // Title acts as the "secret" gesture — open studio on click.
+  useEffect(() => {
+    setInstalled(isStandalone());
+    return onInstallAvailability(setCanInstall);
+  }, []);
+
   const handleTitleClick = () => {
     const next = titleTaps + 1;
     setTitleTaps(next);
-    if (next >= 1) {
-      setStudioOpen(true);
-      setTitleTaps(0);
-    }
+    if (next >= 1) { setStudioOpen(true); setTitleTaps(0); }
     setTimeout(() => setTitleTaps(0), 1500);
+  };
+
+  const handleInstall = async () => {
+    const result = await promptInstall();
+    if (result === "unavailable") {
+      alert(
+        "To install BCradio:\n\n" +
+        "• iPhone/iPad (Safari): tap the Share button, then 'Add to Home Screen'.\n" +
+        "• Android (Chrome): tap the ⋮ menu, then 'Install app' or 'Add to Home screen'.\n" +
+        "• Desktop (Chrome/Edge): click the install icon in the address bar."
+      );
+    }
   };
 
   return (
@@ -46,7 +62,6 @@ function Home() {
           onClick={handleTitleClick}
           className="inline-flex items-center gap-3 cursor-pointer select-none"
           aria-label="BCradio"
-          title="The studio is closer than you think…"
         >
           <Radio className="w-8 h-8 md:w-10 md:h-10 text-amber" />
           <h1 className="font-display text-5xl md:text-7xl tracking-tight dial-glow text-amber">
@@ -62,6 +77,21 @@ function Home() {
           <Moon className="w-3.5 h-3.5" />
           <span>Silent hours: {formatOffAirWindow()}</span>
         </div>
+
+        {!installed && (
+          <div className="mt-5">
+            <button
+              onClick={handleInstall}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-primary-foreground text-sm font-medium shadow"
+            >
+              <Download className="w-4 h-4" />
+              {canInstall ? "Install BCradio app" : "Add to Home Screen"}
+            </button>
+            <div className="mt-2 text-[11px] font-mono text-muted-foreground">
+              Works offline once installed
+            </div>
+          </div>
+        )}
       </header>
 
       <div className="panel p-6 md:p-10">
@@ -100,10 +130,7 @@ function Home() {
                   <span
                     key={i}
                     className="w-1 h-4 rounded-sm"
-                    style={{
-                      background: st.color,
-                      opacity: 0.15 + (i / 14) * 0.6,
-                    }}
+                    style={{ background: st.color, opacity: 0.15 + (i / 14) * 0.6 }}
                   />
                 ))}
               </div>
@@ -113,13 +140,14 @@ function Home() {
 
         {stations.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            No stations yet. Tap the title to open the studio.
+            No stations yet.
           </div>
         )}
       </div>
 
-      <footer className="mt-12 text-center text-xs font-mono text-muted-foreground opacity-60">
-        © BCradio · {new Date().getFullYear()}
+      <footer className="mt-12 text-center text-xs font-mono text-muted-foreground opacity-70 space-y-1">
+        <div>Made by James Degenhardt</div>
+        <div className="opacity-60">© BCradio · {new Date().getFullYear()}</div>
       </footer>
 
       <StudioModal open={studioOpen} onClose={() => setStudioOpen(false)} />
