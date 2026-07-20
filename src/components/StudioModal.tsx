@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { extractDuration, uploadAudio, fmtTime } from "@/lib/radio";
-import { parseYouTubeId, fetchYouTubeDuration, formatOffAirWindow } from "@/lib/youtube";
+import { parseYouTubeId, fetchYouTubeDuration, formatOffAirWindow, parseScheduleTime, formatScheduleTime } from "@/lib/youtube";
+import { fetchCommercials, type Commercial } from "@/lib/commercials";
 import type { Station, Song } from "@/lib/radio";
-import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube } from "lucide-react";
+import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 
 type Props = { open: boolean; onClose: () => void };
@@ -12,7 +13,9 @@ type Props = { open: boolean; onClose: () => void };
 export function StudioModal({ open, onClose }: Props) {
   const [stations, setStations] = useState<Station[]>([]);
   const [songs, setSongs] = useState<Record<string, Song[]>>({});
+  const [commercials, setCommercials] = useState<Commercial[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [view, setView] = useState<"station" | "commercials">("station");
   const [loading, setLoading] = useState(false);
   const [mobileShowEditor, setMobileShowEditor] = useState(false);
   const navigate = useNavigate();
