@@ -140,31 +140,70 @@ export async function fetchYouTubeDuration(videoId: string): Promise<number> {
   });
 }
 
-// Off-air window: local time 22:00 (10pm) - 07:00.
+// Off-air window: Massachusetts (America/New_York) 22:00 (10pm) - 07:00.
 export const OFF_AIR_START_HOUR = 22;
 export const OFF_AIR_END_HOUR = 7;
+export const RADIO_TIMEZONE = "America/New_York";
+
+// Returns {hour, minute, second} in Massachusetts (ET) time for any Date.
+export function etParts(d: Date = new Date()): { hour: number; minute: number; second: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: RADIO_TIMEZONE,
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  // en-US hour with hour12:false may return "24" at midnight — normalize.
+  let hour = get("hour"); if (hour === 24) hour = 0;
+  return { hour, minute: get("minute"), second: get("second") };
+}
+
+export function etSecondsOfDay(d: Date = new Date()): number {
+  const { hour, minute, second } = etParts(d);
+  return hour * 3600 + minute * 60 + second;
+}
 
 export function isOffAir(d: Date = new Date()): boolean {
-  const h = d.getHours();
+  const h = etParts(d).hour;
   return h >= OFF_AIR_START_HOUR || h < OFF_AIR_END_HOUR;
 }
 
 export function msUntilOnAir(d: Date = new Date()): number {
-  const next = new Date(d);
-  if (d.getHours() >= OFF_AIR_START_HOUR) next.setDate(next.getDate() + 1);
-  next.setHours(OFF_AIR_END_HOUR, 0, 0, 0);
-  return next.getTime() - d.getTime();
+  const sec = etSecondsOfDay(d);
+  const target = sec >= OFF_AIR_START_HOUR * 3600
+    ? 24 * 3600 + OFF_AIR_END_HOUR * 3600
+    : OFF_AIR_END_HOUR * 3600;
+  return Math.max(0, (target - sec) * 1000);
 }
 
 export function msUntilOffAir(d: Date = new Date()): number {
-  const next = new Date(d);
-  if (d.getHours() >= OFF_AIR_START_HOUR) next.setDate(next.getDate() + 1);
-  next.setHours(OFF_AIR_START_HOUR, 0, 0, 0);
-  return next.getTime() - d.getTime();
+  const sec = etSecondsOfDay(d);
+  const target = sec < OFF_AIR_START_HOUR * 3600
+    ? OFF_AIR_START_HOUR * 3600
+    : 24 * 3600 + OFF_AIR_START_HOUR * 3600;
+  return Math.max(0, (target - sec) * 1000);
 }
 
 export function formatOffAirWindow(): string {
-  return "10:00 PM – 7:00 AM (your local time)";
+  return "10:00 PM – 7:00 AM ET (Massachusetts time)";
+}
+
+// Parse "HH:MM" 24-hour string into seconds-of-day. Returns null if invalid.
+export function parseScheduleTime(s: string): number | null {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(s);
+  if (!m) return null;
+  const h = Number(m[1]), min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 3600 + min * 60;
+}
+
+export function formatScheduleTime(sec: number): string {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
 export function fadeYouTubeVolume(player: YT.Player, from: number, to: number, ms: number) {
