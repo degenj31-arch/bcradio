@@ -473,3 +473,120 @@ function SongRow({ song, index, onMove, onDelete, onUpdate }: {
     </div>
   );
 }
+
+function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial[]; onChanged: () => void }) {
+  const [adding, setAdding] = useState(false);
+
+  const add = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const url = String(fd.get("url") || "").trim();
+    const title = String(fd.get("title") || "").trim();
+    const timesRaw = String(fd.get("times") || "").trim();
+    const videoId = parseYouTubeId(url);
+    if (!videoId) return toast.error("Paste a valid YouTube URL");
+    if (!title) return toast.error("Title required");
+    const times = timesRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const t of times) {
+      if (parseScheduleTime(t) == null) return toast.error(`Bad time "${t}" — use HH:MM 24-hour, e.g. 12:00, 21:00`);
+    }
+    if (!times.length) return toast.error("Add at least one schedule time (e.g. 12:00, 21:00)");
+    setAdding(true);
+    try {
+      toast.message("Reading video length…");
+      let duration = 30;
+      try { duration = await fetchYouTubeDuration(videoId); }
+      catch { toast.error("Could not read length — using 30s."); }
+      const { error } = await supabase.from("commercials").insert({
+        title, youtube_id: videoId, duration_seconds: duration, schedule_times: times, active: true,
+      });
+      if (error) throw error;
+      toast.success(`Commercial "${title}" scheduled`);
+      form.reset();
+      onChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add");
+    } finally { setAdding(false); }
+  };
+
+  const toggle = async (c: Commercial) => {
+    const { error } = await supabase.from("commercials").update({ active: !c.active }).eq("id", c.id);
+    if (error) return toast.error(error.message);
+    onChanged();
+  };
+
+  const remove = async (c: Commercial) => {
+    if (!confirm(`Delete commercial "${c.title}"?`)) return;
+    const { error } = await supabase.from("commercials").delete().eq("id", c.id);
+    if (error) return toast.error(error.message);
+    onChanged();
+  };
+
+  return (
+    <>
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Megaphone className="w-5 h-5 text-amber" />
+          <h3 className="font-display text-xl">Commercials</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Scheduled by Massachusetts (ET) time. Commercials interrupt every station at the exact moment,
+          synchronized worldwide. Enter times as 24-hour <span className="font-mono">HH:MM</span>, comma-separated
+          (e.g. <span className="font-mono">12:00, 21:00</span> for noon and 9:00 PM).
+        </p>
+      </div>
+
+      <form onSubmit={add} className="space-y-3 p-4 rounded-md border border-border bg-card/40">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground">New commercial</div>
+        <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
+          className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+        <div className="grid sm:grid-cols-2 gap-3">
+          <input name="title" placeholder="Ad title (e.g. Local Diner Spot)" required
+            className="bg-input border border-border rounded-md px-3 py-2" />
+          <input name="times" placeholder="12:00, 21:00" required
+            className="bg-input border border-border rounded-md px-3 py-2 font-mono" />
+        </div>
+        <button disabled={adding} type="submit"
+          className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
+          {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          {adding ? "Adding…" : "Schedule commercial"}
+        </button>
+      </form>
+
+      <div>
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+          Scheduled · {commercials.length}
+        </div>
+        <div className="space-y-2">
+          {commercials.length === 0 && (
+            <div className="text-sm text-muted-foreground py-4">No commercials scheduled.</div>
+          )}
+          {commercials.map((c) => {
+            const times = c.schedule_times
+              .map((t) => { const s = parseScheduleTime(t); return s == null ? t : formatScheduleTime(s); })
+              .join(" · ");
+            return (
+              <div key={c.id} className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-card border border-border">
+                <Youtube className="w-4 h-4 text-red-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{c.title}</div>
+                  <div className="text-xs font-mono text-muted-foreground truncate">
+                    {fmtTime(Number(c.duration_seconds))} · {times || "no times"}
+                  </div>
+                </div>
+                <button onClick={() => toggle(c)}
+                  className={`text-xs px-2 py-1 rounded shrink-0 ${c.active ? "bg-amber/20 text-amber" : "bg-accent text-muted-foreground"}`}>
+                  {c.active ? "Active" : "Paused"}
+                </button>
+                <button onClick={() => remove(c)} className="p-1 hover:bg-destructive/20 text-destructive rounded shrink-0" aria-label="Delete">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
