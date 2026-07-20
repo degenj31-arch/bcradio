@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      commercials: {
+        Row: {
+          active: boolean
+          created_at: string
+          duration_seconds: number
+          id: string
+          schedule_times: string[]
+          title: string
+          updated_at: string
+          youtube_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          duration_seconds: number
+          id?: string
+          schedule_times?: string[]
+          title: string
+          updated_at?: string
+          youtube_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          schedule_times?: string[]
+          title?: string
+          updated_at?: string
+          youtube_id?: string
+        }
+        Relationships: []
+      }
       songs: {
         Row: {
           artist: string | null

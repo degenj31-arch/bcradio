@@ -5,7 +5,8 @@ import type { Station, Song } from "@/lib/radio";
 import { currentPlayhead, getPlayableUrl, fmtTime } from "@/lib/radio";
 import { startStatic } from "@/lib/static-noise";
 import { loadYouTubeAPI, isOffAir, msUntilOnAir, formatOffAirWindow } from "@/lib/youtube";
-import { ArrowLeft, Pause, Play, Volume2, VolumeX, SkipForward, Radio, Moon } from "lucide-react";
+import { fetchCommercials, currentCommercial, type Commercial } from "@/lib/commercials";
+import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone } from "lucide-react";
 
 export const Route = createFileRoute("/station/$number")({
   head: ({ params }) => ({
@@ -22,7 +23,9 @@ function StationPage() {
   const navigate = useNavigate();
   const [station, setStation] = useState<Station | null>(null);
   const [songs, setSongs] = useState<Song[]>([]);
+  const [commercials, setCommercials] = useState<Commercial[]>([]);
   const [current, setCurrent] = useState<Song | null>(null);
+  const [ad, setAd] = useState<Commercial | null>(null);
   const [tuning, setTuning] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -38,8 +41,9 @@ function StationPage() {
   const offAirStaticRef = useRef<ReturnType<typeof startStatic> | null>(null);
   const stoppedRef = useRef(false);
   const activeSourceRef = useRef<"audio" | "yt" | null>(null);
+  const currentYTIdRef = useRef<string | null>(null);
+  const adIdRef = useRef<string | null>(null);
 
-  // Load station + songs
   useEffect(() => {
     stoppedRef.current = false;
     (async () => {
@@ -49,6 +53,7 @@ function StationPage() {
       setStation(st);
       const { data: sg } = await supabase.from("songs").select("*").eq("station_id", st.id).order("position");
       setSongs(sg ?? []);
+      setCommercials(await fetchCommercials());
     })();
     return () => {
       stoppedRef.current = true;
@@ -63,16 +68,15 @@ function StationPage() {
     };
   }, [number]);
 
-  // Off-air ticker — check every 30s
   useEffect(() => {
-    const id = setInterval(() => setOffAir(isOffAir()), 30_000);
+    const id = setInterval(() => setOffAir(isOffAir()), 15_000);
     return () => clearInterval(id);
   }, []);
 
-  // Live song updates
+  // Realtime songs + commercials
   useEffect(() => {
     if (!station) return;
-    const ch = supabase
+    const chSongs = supabase
       .channel(`station-${station.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "songs", filter: `station_id=eq.${station.id}` },
         async () => {
@@ -80,15 +84,13 @@ function StationPage() {
           setSongs(sg ?? []);
         })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const chAds = supabase
+      .channel(`commercials`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "commercials" },
+        async () => setCommercials(await fetchCommercials()))
+      .subscribe();
+    return () => { supabase.removeChannel(chSongs); supabase.removeChannel(chAds); };
   }, [station]);
-
-  const stopSong = useCallback(() => {
-    const a = audioRef.current;
-    if (a) { a.pause(); }
-    try { ytPlayerRef.current?.pauseVideo(); } catch { /* noop */ }
-    setPlaying(false);
-  }, []);
 
   const ensureYT = useCallback(async (): Promise<YT.Player> => {
     if (ytPlayerRef.current) return ytPlayerRef.current;
@@ -109,46 +111,78 @@ function StationPage() {
     return player;
   }, []);
 
+  // Play a YouTube video at offset synchronously. Reuses player when videoId unchanged.
+  const playYouTube = useCallback(async (videoId: string, offset: number) => {
+    if (audioRef.current) audioRef.current.pause();
+    activeSourceRef.current = "yt";
+    const yt = await ensureYT();
+    if (currentYTIdRef.current !== videoId) {
+      yt.loadVideoById({ videoId, startSeconds: offset });
+      currentYTIdRef.current = videoId;
+    } else {
+      try { yt.seekTo(offset, true); } catch { /* noop */ }
+    }
+    try { muted ? yt.mute() : yt.unMute(); } catch { /* noop */ }
+    try { yt.setVolume(muted ? 0 : 90); } catch { /* noop */ }
+    yt.playVideo();
+    setPlaying(true);
+  }, [ensureYT, muted]);
+
+  const playAudioFile = useCallback(async (song: Song, offset: number) => {
+    try { ytPlayerRef.current?.pauseVideo(); } catch { /* noop */ }
+    currentYTIdRef.current = null;
+    activeSourceRef.current = "audio";
+    const audio = audioRef.current;
+    if (!audio || !song.audio_url) return;
+    const url = await getPlayableUrl(song.audio_url);
+    if (stoppedRef.current) return;
+    if (audio.src !== url) {
+      audio.src = url;
+      await new Promise<void>((res) => {
+        const ok = () => { audio.removeEventListener("loadedmetadata", ok); res(); };
+        if (audio.readyState >= 1) res();
+        else audio.addEventListener("loadedmetadata", ok);
+        setTimeout(res, 4000);
+      });
+    }
+    try { audio.currentTime = offset; } catch { /* noop */ }
+    audio.volume = muted ? 0 : 0.9;
+    await audio.play();
+    setPlaying(true);
+  }, [muted]);
+
   const syncAndPlay = useCallback(async () => {
+    if (stoppedRef.current) return;
+    // Commercial break takes priority for global sync.
+    const adNow = currentCommercial(commercials);
+    if (adNow) {
+      if (adIdRef.current !== adNow.commercial.id) {
+        setAd(adNow.commercial);
+        setCurrent(null);
+        adIdRef.current = adNow.commercial.id;
+      }
+      await playYouTube(adNow.commercial.youtube_id, adNow.offset);
+      return;
+    }
+    adIdRef.current = null;
+    setAd(null);
     if (!songs.length) return;
     const head = currentPlayhead(songs);
     if (!head) return;
     setCurrent(head.song);
-    if (stoppedRef.current) return;
-
     if (head.song.youtube_id) {
-      // YouTube path
-      if (audioRef.current) audioRef.current.pause();
-      activeSourceRef.current = "yt";
-      const yt = await ensureYT();
-      yt.loadVideoById({ videoId: head.song.youtube_id, startSeconds: head.offset });
-      try { muted ? yt.mute() : yt.unMute(); } catch { /* noop */ }
-      try { yt.setVolume(muted ? 0 : 90); } catch { /* noop */ }
-      yt.playVideo();
-      setPlaying(true);
+      await playYouTube(head.song.youtube_id, head.offset);
     } else if (head.song.audio_url) {
-      // Audio file path
-      try { ytPlayerRef.current?.pauseVideo(); } catch { /* noop */ }
-      activeSourceRef.current = "audio";
-      const audio = audioRef.current;
-      if (!audio) return;
-      const url = await getPlayableUrl(head.song.audio_url);
-      if (stoppedRef.current) return;
-      if (audio.src !== url) {
-        audio.src = url;
-        await new Promise<void>((res) => {
-          const ok = () => { audio.removeEventListener("loadedmetadata", ok); res(); };
-          if (audio.readyState >= 1) res();
-          else audio.addEventListener("loadedmetadata", ok);
-          setTimeout(res, 4000);
-        });
-      }
-      try { audio.currentTime = head.offset; } catch { /* noop */ }
-      audio.volume = muted ? 0 : 0.9;
-      await audio.play();
-      setPlaying(true);
+      await playAudioFile(head.song, head.offset);
     }
-  }, [songs, muted, ensureYT]);
+  }, [songs, commercials, playYouTube, playAudioFile]);
+
+  const stopSong = useCallback(() => {
+    const a = audioRef.current;
+    if (a) { a.pause(); }
+    try { ytPlayerRef.current?.pauseVideo(); } catch { /* noop */ }
+    setPlaying(false);
+  }, []);
 
   // Off-air enforcement
   useEffect(() => {
@@ -161,13 +195,19 @@ function StationPage() {
     } else {
       offAirStaticRef.current?.stop();
       offAirStaticRef.current = null;
-      // Auto-resume
-      if (!playing && songs.length) {
-        syncAndPlay().catch((e) => console.error(e));
-      }
+      if (!playing) syncAndPlay().catch((e) => console.error(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offAir, needsGesture, songs.length]);
+  }, [offAir, needsGesture, songs.length, commercials.length]);
+
+  // Re-sync every 10s so all clients stay locked (and commercials cut in).
+  useEffect(() => {
+    if (needsGesture || offAir) return;
+    const id = setInterval(() => {
+      syncAndPlay().catch((e) => console.error("[resync]", e));
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [needsGesture, offAir, syncAndPlay]);
 
   const tuneIn = useCallback(async () => {
     if (!station) return;
@@ -180,7 +220,6 @@ function StationPage() {
     if (stoppedRef.current) return;
 
     if (isOffAir()) {
-      // Skip song playback; keep static going
       setOffAir(true);
       staticRef.current?.stop();
       staticRef.current = null;
@@ -189,25 +228,16 @@ function StationPage() {
       return;
     }
 
-    if (songs.length) {
-      try { await syncAndPlay(); }
-      catch (e) {
-        console.error("playback error", e);
-        setError(e instanceof Error ? e.message : "Playback failed");
-      }
+    try { await syncAndPlay(); }
+    catch (e) {
+      console.error("playback error", e);
+      setError(e instanceof Error ? e.message : "Playback failed");
     }
     staticRef.current?.fadeOut(0.8);
     setTuning(false);
-  }, [station, songs, syncAndPlay]);
+  }, [station, syncAndPlay]);
 
-  const handleEnded = async () => {
-    if (!songs.length || offAir) return;
-    try { await syncAndPlay(); } catch (e) {
-      setError(e instanceof Error ? e.message : "Playback failed");
-    }
-  };
-
-  // Progress + YT ended detection
+  // Progress + YT ended detection (auto-advance)
   useEffect(() => {
     const id = setInterval(() => {
       if (activeSourceRef.current === "audio") {
@@ -221,14 +251,15 @@ function StationPage() {
           const dur = p.getDuration();
           if (dur > 0) {
             setProgress(cur / dur);
-            if (cur >= dur - 0.3 && !offAir) { handleEnded(); }
+            if (cur >= dur - 0.3 && !offAir) {
+              syncAndPlay().catch(() => {});
+            }
           }
         } catch { /* noop */ }
       }
     }, 500);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offAir]);
+  }, [offAir, syncAndPlay]);
 
   useEffect(() => {
     if (!current || !("mediaSession" in navigator)) return;
@@ -237,17 +268,7 @@ function StationPage() {
       artist: current.artist ?? station?.name ?? "BCradio",
       album: `BCradio ${station ? Number(station.number).toFixed(1) : ""} FM`,
     });
-    navigator.mediaSession.setActionHandler?.("play", () => audioRef.current?.play());
-    navigator.mediaSession.setActionHandler?.("pause", () => audioRef.current?.pause());
-    navigator.mediaSession.setActionHandler?.("nexttrack", handleEnded);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, station]);
-
-  const togglePlay = async () => {
-    if (offAir) return;
-    if (playing) { stopSong(); }
-    else { try { await syncAndPlay(); } catch { /* noop */ } }
-  };
 
   const toggleMute = () => {
     const next = !muted;
@@ -256,9 +277,6 @@ function StationPage() {
     if (a) a.volume = next ? 0 : 0.9;
     const p = ytPlayerRef.current;
     if (p) { try { next ? p.mute() : p.unMute(); p.setVolume(next ? 0 : 90); } catch { /* noop */ } }
-    if (offAirStaticRef.current) {
-      // static keeps playing but obey mute-ish: just stop/restart
-    }
   };
 
   if (error) {
@@ -276,6 +294,7 @@ function StationPage() {
   }
 
   const resumeMinutes = Math.ceil(msUntilOnAir() / 60000);
+  const displayDurationSec = ad ? Number(ad.duration_seconds) : (current ? Number(current.duration_seconds) : 0);
 
   return (
     <div className="min-h-screen px-3 sm:px-4 py-6 sm:py-8 max-w-3xl mx-auto">
@@ -284,7 +303,7 @@ function StationPage() {
           <ArrowLeft className="w-4 h-4" /> Dial
         </button>
         <div className="font-mono text-[10px] sm:text-xs text-muted-foreground">
-          {offAir ? "OFF AIR · NIGHT" : "LIVE · WORLDWIDE"}
+          {offAir ? "OFF AIR · NIGHT" : ad ? "AD BREAK · SYNCED" : "LIVE · SYNCED WORLDWIDE"}
         </div>
       </nav>
 
@@ -326,15 +345,20 @@ function StationPage() {
                 <Moon className="w-5 h-5" />
                 <span className="font-display text-lg sm:text-xl">Off air · Night broadcast paused</span>
               </div>
-              <div className="text-xs text-muted-foreground font-mono">
-                Silent hours: {formatOffAirWindow()}
-              </div>
+              <div className="text-xs text-muted-foreground font-mono">Silent hours: {formatOffAirWindow()}</div>
               <div className="text-xs text-muted-foreground">
-                Resumes in ~{resumeMinutes} min. Songs pick back up automatically at 7:00 AM.
+                Resumes in ~{resumeMinutes} min. Songs pick back up automatically at 7:00 AM ET.
               </div>
             </div>
           ) : tuning ? (
             <div className="font-mono text-sm text-muted-foreground animate-pulse">⟨ tuning in… ⟩</div>
+          ) : ad ? (
+            <>
+              <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-amber">
+                <Megaphone className="w-3.5 h-3.5" /> Commercial break
+              </div>
+              <div className="text-lg sm:text-xl md:text-2xl font-medium mt-1 break-words">{ad.title}</div>
+            </>
           ) : current ? (
             <>
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Now playing</div>
@@ -346,46 +370,45 @@ function StationPage() {
           )}
         </div>
 
-        {current && !needsGesture && !offAir && (
+        {(current || ad) && !needsGesture && !offAir && (
           <div className="mt-6">
             <div className="h-1 bg-muted rounded-full overflow-hidden">
               <div className="h-full bg-amber transition-all"
                 style={{ width: `${Math.min(100, progress * 100)}%` }} />
             </div>
             <div className="flex justify-between font-mono text-xs text-muted-foreground mt-1">
-              <span>{fmtTime(progress * Number(current.duration_seconds))}</span>
-              <span>{fmtTime(Number(current.duration_seconds))}</span>
+              <span>{fmtTime(progress * displayDurationSec)}</span>
+              <span>{fmtTime(displayDurationSec)}</span>
             </div>
           </div>
         )}
 
         {!needsGesture && (
-          <div className="mt-6 sm:mt-8 flex items-center justify-center gap-3 sm:gap-4">
-            <button onClick={toggleMute} className="p-3 rounded-full hover:bg-accent" aria-label="Mute">
-              {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+          <div className="mt-6 sm:mt-8 flex flex-col items-center gap-2">
+            <button onClick={toggleMute}
+              className="station-knob w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-amber"
+              aria-label={muted ? "Unmute" : "Mute"}>
+              {muted ? <VolumeX className="w-7 h-7" /> : <Volume2 className="w-7 h-7" />}
             </button>
-            <button onClick={togglePlay} disabled={offAir}
-              className="station-knob w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-amber disabled:opacity-40"
-              aria-label={playing ? "Pause" : "Play"}>
-              {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
-            </button>
-            <button onClick={handleEnded} disabled={offAir}
-              className="p-3 rounded-full hover:bg-accent disabled:opacity-40" aria-label="Skip">
-              <SkipForward className="w-5 h-5" />
-            </button>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+              Synced worldwide · no pause · no skip
+            </div>
           </div>
         )}
       </div>
 
+      <footer className="mt-8 text-center text-xs font-mono text-muted-foreground opacity-70">
+        Made by James Degenhardt
+      </footer>
+
       <audio
         ref={audioRef}
-        onEnded={handleEnded}
         onPlay={() => { if (activeSourceRef.current === "audio") setPlaying(true); }}
         onPause={() => { if (activeSourceRef.current === "audio") setPlaying(false); }}
+        onEnded={() => { if (!offAir) syncAndPlay().catch(() => {}); }}
         onError={() => setError("Audio failed to load")}
         playsInline
       />
-      {/* Hidden YouTube host (kept in DOM so autoplay-with-sound works after user gesture) */}
       <div
         ref={ytHolderRef}
         aria-hidden
