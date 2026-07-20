@@ -27,6 +27,7 @@ export function StudioModal({ open, onClose }: Props) {
     const grouped: Record<string, Song[]> = {};
     (sg ?? []).forEach((s) => { (grouped[s.station_id] ??= []).push(s); });
     setSongs(grouped);
+    setCommercials(await fetchCommercials());
     const next = keepId ?? selectedId ?? st?.[0]?.id ?? null;
     setSelectedId(next);
   };
