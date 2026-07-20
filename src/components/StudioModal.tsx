@@ -208,7 +208,7 @@ export function StudioModal({ open, onClose }: Props) {
                   key={st.id}
                   onClick={() => selectStation(st.id)}
                   className={`w-full text-left px-3 py-2 rounded-md transition flex items-center gap-2 ${
-                    selectedId === st.id ? "bg-accent text-foreground" : "hover:bg-accent/50 text-muted-foreground"
+                    view === "station" && selectedId === st.id ? "bg-accent text-foreground" : "hover:bg-accent/50 text-muted-foreground"
                   }`}
                 >
                   <span className="w-2 h-8 rounded-full shrink-0" style={{ background: st.color }} />
@@ -218,6 +218,21 @@ export function StudioModal({ open, onClose }: Props) {
                   </div>
                 </button>
               ))}
+
+              <div className="pt-3 mt-3 border-t border-border">
+                <button
+                  onClick={openCommercials}
+                  className={`w-full text-left px-3 py-2 rounded-md transition flex items-center gap-2 ${
+                    view === "commercials" ? "bg-accent text-foreground" : "hover:bg-accent/50 text-muted-foreground"
+                  }`}
+                >
+                  <Megaphone className="w-4 h-4 text-amber shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">Commercials</div>
+                    <div className="text-xs truncate">{commercials.length} scheduled</div>
+                  </div>
+                </button>
+              </div>
             </aside>
 
             <section className={`${mobileShowEditor ? "block" : "hidden"} md:block p-4 sm:p-6 space-y-6`}>
@@ -225,9 +240,11 @@ export function StudioModal({ open, onClose }: Props) {
                 onClick={() => setMobileShowEditor(false)}
                 className="md:hidden text-sm text-muted-foreground hover:text-foreground mb-2"
               >
-                ← All stations
+                ← Back
               </button>
-              {!selected ? (
+              {view === "commercials" ? (
+                <CommercialsEditor commercials={commercials} onChanged={() => refresh(selectedId)} />
+              ) : !selected ? (
                 <div className="text-muted-foreground">Select a station.</div>
               ) : (
                 <StationEditor
