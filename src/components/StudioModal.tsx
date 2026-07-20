@@ -61,6 +61,12 @@ export function StudioModal({ open, onClose }: Props) {
 
   const selectStation = (id: string) => {
     setSelectedId(id);
+    setView("station");
+    setMobileShowEditor(true);
+  };
+
+  const openCommercials = () => {
+    setView("commercials");
     setMobileShowEditor(true);
   };
 
