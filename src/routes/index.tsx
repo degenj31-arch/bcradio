@@ -5,7 +5,9 @@ import type { Station } from "@/lib/radio";
 import { StudioModal } from "@/components/StudioModal";
 import { isOffAir, formatOffAirWindow } from "@/lib/youtube";
 import { onInstallAvailability, promptInstall, isStandalone } from "@/lib/pwa";
-import { Radio, Moon, Download } from "lucide-react";
+import { stationListenerCount, totalListeners } from "@/lib/listeners";
+import { Radio, Moon, Download, Users } from "lucide-react";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,6 +27,7 @@ function Home() {
   const [titleTaps, setTitleTaps] = useState(0);
   const [canInstall, setCanInstall] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     supabase.from("stations").select("*").order("number")
@@ -36,12 +39,19 @@ function Home() {
     return onInstallAvailability(setCanInstall);
   }, []);
 
+  // Repaint listener counts every 2 seconds.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 2000);
+    return () => clearInterval(id);
+  }, []);
+
   const handleTitleClick = () => {
     const next = titleTaps + 1;
     setTitleTaps(next);
     if (next >= 1) { setStudioOpen(true); setTitleTaps(0); }
     setTimeout(() => setTitleTaps(0), 1500);
   };
+
 
   const handleInstall = async () => {
     const result = await promptInstall();
