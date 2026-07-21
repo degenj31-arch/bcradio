@@ -154,8 +154,11 @@ export type Database = {
       }
       stations: {
         Row: {
+          avg_listeners: number
           color: string
           created_at: string
+          fluctuation: number
+          fluctuation_rate_seconds: number
           id: string
           name: string
           number: number
@@ -163,8 +166,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avg_listeners?: number
           color?: string
           created_at?: string
+          fluctuation?: number
+          fluctuation_rate_seconds?: number
           id?: string
           name: string
           number: number
@@ -172,8 +178,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avg_listeners?: number
           color?: string
           created_at?: string
+          fluctuation?: number
+          fluctuation_rate_seconds?: number
           id?: string
           name?: string
           number?: number
