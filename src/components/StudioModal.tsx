@@ -293,6 +293,15 @@ function StationEditor({
   const [name, setName] = useState(station.name);
   const [tagline, setTagline] = useState(station.tagline ?? "");
   const [color, setColor] = useState(station.color);
+  const [avgListeners, setAvgListeners] = useState<string>(
+    String((station as unknown as { avg_listeners?: number }).avg_listeners ?? 50)
+  );
+  const [fluctuation, setFluctuation] = useState<string>(
+    String((station as unknown as { fluctuation?: number }).fluctuation ?? 15)
+  );
+  const [fluctuationRate, setFluctuationRate] = useState<string>(
+    String((station as unknown as { fluctuation_rate_seconds?: number }).fluctuation_rate_seconds ?? 60)
+  );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"youtube" | "file">("youtube");
@@ -303,9 +312,16 @@ function StationEditor({
     const n = Number(number);
     if (!isFinite(n) || n <= 0) return toast.error("Invalid frequency");
     if (!name.trim()) return toast.error("Name required");
+    const avg = Number(avgListeners);
+    const fluct = Number(fluctuation);
+    const rate = Number(fluctuationRate);
+    if (!isFinite(avg) || avg < 0) return toast.error("Average listeners must be ≥ 0");
+    if (!isFinite(fluct) || fluct < 0) return toast.error("Fluctuation must be ≥ 0");
+    if (!isFinite(rate) || rate < 1) return toast.error("Fluctuation rate must be ≥ 1s");
     setSaving(true);
     const { error } = await supabase.from("stations").update({
       number: n, name: name.trim(), tagline: tagline.trim() || null, color,
+      avg_listeners: avg, fluctuation: fluct, fluctuation_rate_seconds: rate,
     }).eq("id", station.id);
     setSaving(false);
     if (error) return toast.error(error.message);
@@ -335,6 +351,31 @@ function StationEditor({
             className="w-full h-10 bg-input border border-border rounded-md" />
         </Field>
       </div>
+
+      <div>
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Listener Stats (displayed)</div>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <Field label="Average listeners">
+            <input type="number" min="0" step="1" value={avgListeners}
+              onChange={(e) => mark(setAvgListeners)(e.target.value)}
+              className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono" />
+          </Field>
+          <Field label="Fluctuation (± count)">
+            <input type="number" min="0" step="1" value={fluctuation}
+              onChange={(e) => mark(setFluctuation)(e.target.value)}
+              className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono" />
+          </Field>
+          <Field label="Fluctuation rate (seconds)">
+            <input type="number" min="1" step="1" value={fluctuationRate}
+              onChange={(e) => mark(setFluctuationRate)(e.target.value)}
+              className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono" />
+          </Field>
+        </div>
+        <p className="text-[11px] font-mono text-muted-foreground mt-1">
+          Same value shown to every viewer worldwide (time-based). Lower rate = faster changes.
+        </p>
+      </div>
+
 
       <div className="flex flex-wrap gap-2">
         <button onClick={save} disabled={!dirty || saving}
