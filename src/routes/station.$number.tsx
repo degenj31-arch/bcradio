@@ -1,14 +1,23 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Station, Song } from "@/lib/radio";
 import { currentPlayhead, getPlayableUrl, fmtTime } from "@/lib/radio";
 import { startStatic } from "@/lib/static-noise";
-import { loadYouTubeAPI, isOffAir, msUntilOnAir, formatOffAirWindow } from "@/lib/youtube";
-import { fetchCommercials, currentCommercial, type Commercial } from "@/lib/commercials";
-import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone } from "lucide-react";
+import { loadYouTubeAPI, isOffAir, msUntilOnAir, formatOffAirWindow, etParts } from "@/lib/youtube";
+import {
+  fetchCommercials, findPendingCommercial, nextCommercialInfo, type Commercial,
+} from "@/lib/commercials";
+import { hd2Playlist, stationListenerCount } from "@/lib/listeners";
+import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone, Users, Clock } from "lucide-react";
+
+type StationSearch = { hd?: "2" };
 
 export const Route = createFileRoute("/station/$number")({
+  validateSearch: (raw: Record<string, unknown>): StationSearch => {
+    const hd = raw.hd;
+    return { hd: hd === "2" || hd === 2 ? "2" : undefined };
+  },
   head: ({ params }) => ({
     meta: [
       { title: `BCradio ${params.number} FM` },
@@ -20,9 +29,12 @@ export const Route = createFileRoute("/station/$number")({
 
 function StationPage() {
   const { number } = Route.useParams();
+  const { hd } = Route.useSearch();
+  const isHD2 = hd === "2";
   const navigate = useNavigate();
+
   const [station, setStation] = useState<Station | null>(null);
-  const [songs, setSongs] = useState<Song[]>([]);
+  const [rawSongs, setRawSongs] = useState<Song[]>([]);
   const [commercials, setCommercials] = useState<Commercial[]>([]);
   const [current, setCurrent] = useState<Song | null>(null);
   const [ad, setAd] = useState<Commercial | null>(null);
@@ -33,6 +45,7 @@ function StationPage() {
   const [error, setError] = useState<string | null>(null);
   const [needsGesture, setNeedsGesture] = useState(true);
   const [offAir, setOffAir] = useState(isOffAir());
+  const [tick, setTick] = useState(0); // 1Hz repaint for clock/listeners
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
@@ -42,7 +55,14 @@ function StationPage() {
   const stoppedRef = useRef(false);
   const activeSourceRef = useRef<"audio" | "yt" | null>(null);
   const currentYTIdRef = useRef<string | null>(null);
-  const adIdRef = useRef<string | null>(null);
+  const adPlayingRef = useRef(false);
+  const playedAdKeysRef = useRef<Set<string>>(new Set());
+
+  // Songs list (respecting HD-2 reshuffle).
+  const songs = useMemo(
+    () => (isHD2 && station ? hd2Playlist(station.id, rawSongs) : rawSongs),
+    [isHD2, station, rawSongs]
+  );
 
   useEffect(() => {
     stoppedRef.current = false;
@@ -52,7 +72,7 @@ function StationPage() {
       if (!st) { setError("Station not found"); return; }
       setStation(st);
       const { data: sg } = await supabase.from("songs").select("*").eq("station_id", st.id).order("position");
-      setSongs(sg ?? []);
+      setRawSongs(sg ?? []);
       setCommercials(await fetchCommercials());
     })();
     return () => {
@@ -68,12 +88,13 @@ function StationPage() {
     };
   }, [number]);
 
+  // 1Hz clock/listener repaint + off-air check.
   useEffect(() => {
-    const id = setInterval(() => setOffAir(isOffAir()), 15_000);
+    const id = setInterval(() => { setTick((t) => t + 1); setOffAir(isOffAir()); }, 1000);
     return () => clearInterval(id);
   }, []);
 
-  // Realtime songs + commercials
+  // Realtime songs + commercials + stations
   useEffect(() => {
     if (!station) return;
     const chSongs = supabase
@@ -81,15 +102,24 @@ function StationPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "songs", filter: `station_id=eq.${station.id}` },
         async () => {
           const { data: sg } = await supabase.from("songs").select("*").eq("station_id", station.id).order("position");
-          setSongs(sg ?? []);
+          setRawSongs(sg ?? []);
         })
       .subscribe();
     const chAds = supabase
-      .channel(`commercials`)
+      .channel(`commercials-${station.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "commercials" },
         async () => setCommercials(await fetchCommercials()))
       .subscribe();
-    return () => { supabase.removeChannel(chSongs); supabase.removeChannel(chAds); };
+    const chStation = supabase
+      .channel(`station-row-${station.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "stations", filter: `id=eq.${station.id}` },
+        (payload) => setStation(payload.new as Station))
+      .subscribe();
+    return () => {
+      supabase.removeChannel(chSongs);
+      supabase.removeChannel(chAds);
+      supabase.removeChannel(chStation);
+    };
   }, [station]);
 
   const ensureYT = useCallback(async (): Promise<YT.Player> => {
@@ -111,7 +141,6 @@ function StationPage() {
     return player;
   }, []);
 
-  // Play a YouTube video at offset synchronously. Reuses player when videoId unchanged.
   const playYouTube = useCallback(async (videoId: string, offset: number) => {
     if (audioRef.current) audioRef.current.pause();
     activeSourceRef.current = "yt";
@@ -151,31 +180,46 @@ function StationPage() {
     setPlaying(true);
   }, [muted]);
 
+  // Play a commercial from the beginning (not globally synced).
+  const playAd = useCallback(async (c: Commercial) => {
+    adPlayingRef.current = true;
+    setAd(c);
+    setCurrent(null);
+    await playYouTube(c.youtube_id, 0);
+  }, [playYouTube]);
+
   const syncAndPlay = useCallback(async () => {
     if (stoppedRef.current) return;
-    // Commercial break takes priority for global sync.
-    const adNow = currentCommercial(commercials);
-    if (adNow) {
-      if (adIdRef.current !== adNow.commercial.id) {
-        setAd(adNow.commercial);
-        setCurrent(null);
-        adIdRef.current = adNow.commercial.id;
-      }
-      await playYouTube(adNow.commercial.youtube_id, adNow.offset);
-      return;
-    }
-    adIdRef.current = null;
-    setAd(null);
     if (!songs.length) return;
     const head = currentPlayhead(songs);
     if (!head) return;
+    adPlayingRef.current = false;
+    setAd(null);
     setCurrent(head.song);
     if (head.song.youtube_id) {
       await playYouTube(head.song.youtube_id, head.offset);
     } else if (head.song.audio_url) {
       await playAudioFile(head.song, head.offset);
     }
-  }, [songs, commercials, playYouTube, playAudioFile]);
+  }, [songs, playYouTube, playAudioFile]);
+
+  // After a song ends, either fire a pending commercial or advance to the next song.
+  const onSongEnded = useCallback(async () => {
+    if (stoppedRef.current || offAir) return;
+    if (adPlayingRef.current) {
+      // Ad finished → resume normal broadcast.
+      adPlayingRef.current = false;
+      await syncAndPlay().catch((e) => console.error("[resume]", e));
+      return;
+    }
+    const pending = findPendingCommercial(commercials, playedAdKeysRef.current);
+    if (pending) {
+      playedAdKeysRef.current.add(pending.key);
+      await playAd(pending.commercial).catch((e) => console.error("[ad]", e));
+      return;
+    }
+    await syncAndPlay().catch((e) => console.error("[advance]", e));
+  }, [commercials, offAir, playAd, syncAndPlay]);
 
   const stopSong = useCallback(() => {
     const a = audioRef.current;
@@ -184,26 +228,28 @@ function StationPage() {
     setPlaying(false);
   }, []);
 
-  // Off-air enforcement
   useEffect(() => {
     if (needsGesture) return;
     if (offAir) {
       stopSong();
+      adPlayingRef.current = false;
+      setAd(null);
       if (!offAirStaticRef.current) {
         try { offAirStaticRef.current = startStatic(0.35); } catch { /* noop */ }
       }
     } else {
       offAirStaticRef.current?.stop();
       offAirStaticRef.current = null;
-      if (!playing) syncAndPlay().catch((e) => console.error(e));
+      if (!playing && !adPlayingRef.current) syncAndPlay().catch((e) => console.error(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offAir, needsGesture, songs.length, commercials.length]);
+  }, [offAir, needsGesture, songs.length]);
 
-  // Re-sync every 10s so all clients stay locked (and commercials cut in).
+  // Re-sync every 10s so all clients stay locked. Skip during an ad break.
   useEffect(() => {
     if (needsGesture || offAir) return;
     const id = setInterval(() => {
+      if (adPlayingRef.current) return;
       syncAndPlay().catch((e) => console.error("[resync]", e));
     }, 10_000);
     return () => clearInterval(id);
@@ -237,7 +283,7 @@ function StationPage() {
     setTuning(false);
   }, [station, syncAndPlay]);
 
-  // Progress + YT ended detection (auto-advance)
+  // Progress + end detection.
   useEffect(() => {
     const id = setInterval(() => {
       if (activeSourceRef.current === "audio") {
@@ -252,23 +298,23 @@ function StationPage() {
           if (dur > 0) {
             setProgress(cur / dur);
             if (cur >= dur - 0.3 && !offAir) {
-              syncAndPlay().catch(() => {});
+              onSongEnded().catch(() => {});
             }
           }
         } catch { /* noop */ }
       }
     }, 500);
     return () => clearInterval(id);
-  }, [offAir, syncAndPlay]);
+  }, [offAir, onSongEnded]);
 
   useEffect(() => {
     if (!current || !("mediaSession" in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: current.title,
       artist: current.artist ?? station?.name ?? "BCradio",
-      album: `BCradio ${station ? Number(station.number).toFixed(1) : ""} FM`,
+      album: `BCradio ${station ? Number(station.number).toFixed(1) : ""}${isHD2 ? " HD-2" : ""} FM`,
     });
-  }, [current, station]);
+  }, [current, station, isHD2]);
 
   const toggleMute = () => {
     const next = !muted;
@@ -296,16 +342,41 @@ function StationPage() {
   const resumeMinutes = Math.ceil(msUntilOnAir() / 60000);
   const displayDurationSec = ad ? Number(ad.duration_seconds) : (current ? Number(current.duration_seconds) : 0);
 
+  // Ticker data — recomputed each `tick`.
+  void tick;
+  const et = etParts();
+  const period = et.hour >= 12 ? "PM" : "AM";
+  const h12 = ((et.hour + 11) % 12) + 1;
+  const etTimeStr = `${h12}:${String(et.minute).padStart(2, "0")}:${String(et.second).padStart(2, "0")} ${period} ET`;
+  const nextAd = nextCommercialInfo(commercials);
+  const listeners = station ? stationListenerCount(station) : 0;
+
   return (
     <div className="min-h-screen px-3 sm:px-4 py-6 sm:py-8 max-w-3xl mx-auto">
-      <nav className="flex items-center justify-between mb-6 sm:mb-8">
+      <nav className="flex items-center justify-between mb-4 sm:mb-6">
         <button onClick={() => navigate({ to: "/" })} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm">
           <ArrowLeft className="w-4 h-4" /> Dial
         </button>
         <div className="font-mono text-[10px] sm:text-xs text-muted-foreground">
-          {offAir ? "OFF AIR · NIGHT" : ad ? "AD BREAK · SYNCED" : "LIVE · SYNCED WORLDWIDE"}
+          {offAir ? "OFF AIR · NIGHT" : ad ? "AD BREAK" : "LIVE · SYNCED WORLDWIDE"}
         </div>
       </nav>
+
+      {/* On-air ticker */}
+      <div className="panel px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs font-mono">
+        <span className="inline-flex items-center gap-1.5 text-amber">
+          <Clock className="w-3.5 h-3.5" /> {etTimeStr}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <Users className="w-3.5 h-3.5" /> {listeners.toLocaleString()} tuned in
+        </span>
+        {nextAd && !offAir && (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <Megaphone className="w-3.5 h-3.5" />
+            Next break: {fmtCountdown(nextAd.msUntil)} · {nextAd.commercial.title}
+          </span>
+        )}
+      </div>
 
       <div className="panel relative overflow-hidden p-4 sm:p-6 md:p-10">
         {(tuning || offAir) && <div className="absolute inset-0 tv-static z-10 pointer-events-none" />}
@@ -318,7 +389,9 @@ function StationPage() {
             style={{ color: station?.color ?? "var(--amber)" }}>
             {station ? Number(station.number).toFixed(1) : "···"}
           </div>
-          <div className="font-mono text-sm text-muted-foreground mt-1">FM</div>
+          <div className="font-mono text-sm text-muted-foreground mt-1">
+            FM{isHD2 && <span className="ml-2 px-1.5 py-0.5 rounded bg-amber/20 text-amber text-[10px] tracking-widest">HD-2</span>}
+          </div>
         </div>
 
         <div className="flex items-end justify-center gap-1 h-10 sm:h-12 mb-6 sm:mb-8">
@@ -393,6 +466,29 @@ function StationPage() {
             <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               Synced worldwide · no pause · no skip
             </div>
+            {station && (
+              <div className="mt-2 flex gap-2">
+                {!isHD2 ? (
+                  <Link
+                    to="/station/$number"
+                    params={{ number: String(Number(station.number)) }}
+                    search={{ hd: "2" }}
+                    className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
+                  >
+                    Switch to HD-2
+                  </Link>
+                ) : (
+                  <Link
+                    to="/station/$number"
+                    params={{ number: String(Number(station.number)) }}
+                    search={{}}
+                    className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
+                  >
+                    Switch to main
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -405,7 +501,7 @@ function StationPage() {
         ref={audioRef}
         onPlay={() => { if (activeSourceRef.current === "audio") setPlaying(true); }}
         onPause={() => { if (activeSourceRef.current === "audio") setPlaying(false); }}
-        onEnded={() => { if (!offAir) syncAndPlay().catch(() => {}); }}
+        onEnded={() => { if (!offAir) onSongEnded().catch(() => {}); }}
         onError={() => setError("Audio failed to load")}
         playsInline
       />
@@ -416,4 +512,14 @@ function StationPage() {
       />
     </div>
   );
+}
+
+function fmtCountdown(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
+  return `${s}s`;
 }
