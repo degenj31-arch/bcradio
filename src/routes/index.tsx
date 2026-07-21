@@ -87,6 +87,10 @@ function Home() {
           <Moon className="w-3.5 h-3.5" />
           <span>Silent hours: {formatOffAirWindow()}</span>
         </div>
+        <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono border border-amber/30 bg-amber/5 text-amber ml-2">
+          <Users className="w-3.5 h-3.5" />
+          <span>{totalListeners(stations).toLocaleString()} listeners across all stations</span>
+        </div>
 
         {!installed && (
           <div className="mt-5">
@@ -116,37 +120,64 @@ function Home() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {stations.map((st) => (
-            <Link
-              key={st.id}
-              to="/station/$number"
-              params={{ number: String(Number(st.number)) }}
-              className="group relative panel p-5 hover:border-amber/50 transition overflow-hidden"
-              style={{ background: `linear-gradient(135deg, ${st.color}15, transparent 70%)` }}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">FM</div>
-                  <div className="font-display text-4xl dial-glow" style={{ color: st.color }}>
-                    {Number(st.number).toFixed(1)}
+          {stations.map((st) => {
+            const listeners = stationListenerCount(st);
+            return (
+              <div
+                key={st.id}
+                className="group relative panel p-5 hover:border-amber/50 transition overflow-hidden"
+                style={{ background: `linear-gradient(135deg, ${st.color}15, transparent 70%)` }}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <Link
+                    to="/station/$number"
+                    params={{ number: String(Number(st.number)) }}
+                    className="block"
+                  >
+                    <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">FM</div>
+                    <div className="font-display text-4xl dial-glow" style={{ color: st.color }}>
+                      {Number(st.number).toFixed(1)}
+                    </div>
+                  </Link>
+                  <div className="text-right">
+                    <div className="station-knob w-12 h-12 rounded-full group-hover:rotate-45 transition-transform duration-500 ml-auto" />
+                    <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
+                      <Users className="w-3 h-3" /> {listeners.toLocaleString()}
+                    </div>
                   </div>
                 </div>
-                <div className="station-knob w-12 h-12 rounded-full group-hover:rotate-45 transition-transform duration-500" />
+                <Link
+                  to="/station/$number"
+                  params={{ number: String(Number(st.number)) }}
+                  className="block"
+                >
+                  <div className="font-medium text-lg">{st.name}</div>
+                  {st.tagline && <div className="text-sm text-muted-foreground mt-1">{st.tagline}</div>}
+                </Link>
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="w-1 h-4 rounded-sm"
+                        style={{ background: st.color, opacity: 0.15 + (i / 10) * 0.6 }}
+                      />
+                    ))}
+                  </div>
+                  <Link
+                    to="/station/$number"
+                    params={{ number: String(Number(st.number)) }}
+                    search={{ hd: "2" }}
+                    className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
+                  >
+                    HD-2
+                  </Link>
+                </div>
               </div>
-              <div className="font-medium text-lg">{st.name}</div>
-              {st.tagline && <div className="text-sm text-muted-foreground mt-1">{st.tagline}</div>}
-              <div className="mt-4 flex items-center gap-1">
-                {Array.from({ length: 14 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className="w-1 h-4 rounded-sm"
-                    style={{ background: st.color, opacity: 0.15 + (i / 14) * 0.6 }}
-                  />
-                ))}
-              </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
+
 
         {stations.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
