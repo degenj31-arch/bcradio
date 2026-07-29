@@ -419,11 +419,18 @@ function StationPage() {
   const toggleMute = () => {
     const next = !muted;
     setMuted(next);
+    const level = fadeLevelRef.current;
     const a = audioRef.current;
-    if (a) a.volume = next ? 0 : 0.9;
+    if (a) a.volume = next ? 0 : 0.9 * level;
     const p = ytPlayerRef.current;
-    if (p) { try { next ? p.mute() : p.unMute(); p.setVolume(next ? 0 : 90); } catch { /* noop */ } }
+    if (p) {
+      try {
+        if (next) p.mute(); else p.unMute();
+        p.setVolume(next ? 0 : Math.round(90 * level));
+      } catch { /* noop */ }
+    }
   };
+
 
   if (error) {
     return (
