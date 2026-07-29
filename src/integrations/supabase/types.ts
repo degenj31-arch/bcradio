@@ -47,6 +47,57 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_log: {
+        Row: {
+          created_at: string
+          id: string
+          sent_count: number
+          slot_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          sent_count?: number
+          slot_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          sent_count?: number
+          slot_key?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       songs: {
         Row: {
           artist: string | null

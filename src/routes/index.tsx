@@ -3,10 +3,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Station } from "@/lib/radio";
 import { StudioModal } from "@/components/StudioModal";
+import { WeatherSection } from "@/components/WeatherSection";
 import { isOffAir, formatOffAirWindow } from "@/lib/youtube";
 import { onInstallAvailability, promptInstall, isStandalone } from "@/lib/pwa";
+import {
+  enableBroadcastNotifications, disableBroadcastNotifications,
+  isSubscribed, notificationPermission,
+} from "@/lib/push";
 import { stationListenerCount, totalListeners } from "@/lib/listeners";
-import { Radio, Moon, Download, Users } from "lucide-react";
+import { Radio, Moon, Download, Users, Bell, BellOff, CloudSun } from "lucide-react";
+import { toast } from "sonner";
+
 
 
 export const Route = createFileRoute("/")({
@@ -28,6 +35,8 @@ function Home() {
   const [canInstall, setCanInstall] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [, setTick] = useState(0);
+  const [notifOn, setNotifOn] = useState(false);
+  const [notifBusy, setNotifBusy] = useState(false);
 
   useEffect(() => {
     supabase.from("stations").select("*").order("number")
@@ -36,8 +45,33 @@ function Home() {
 
   useEffect(() => {
     setInstalled(isStandalone());
+    isSubscribed().then(setNotifOn);
     return onInstallAvailability(setCanInstall);
   }, []);
+
+  const toggleNotifications = async () => {
+    setNotifBusy(true);
+    try {
+      if (notifOn) {
+        await disableBroadcastNotifications();
+        setNotifOn(false);
+        toast.success("Daily broadcast alerts turned off");
+      } else {
+        const res = await enableBroadcastNotifications();
+        if (res.ok) {
+          setNotifOn(true);
+          toast.success("You'll get sign-on and sign-off alerts every day");
+        } else {
+          toast.error(res.reason);
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update notifications");
+    } finally {
+      setNotifBusy(false);
+    }
+  };
+
 
   // Repaint listener counts every 2 seconds.
   useEffect(() => {
@@ -106,7 +140,29 @@ function Home() {
             </div>
           </div>
         )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <button
+            onClick={toggleNotifications}
+            disabled={notifBusy}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-amber/40 bg-amber/5 text-amber text-xs font-mono uppercase tracking-widest disabled:opacity-50"
+          >
+            {notifOn ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+            {notifOn ? "Daily alerts on" : "Turn on daily alerts"}
+          </button>
+          <a
+            href="#weather"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-border text-muted-foreground text-xs font-mono uppercase tracking-widest hover:text-amber hover:border-amber/50"
+          >
+            <CloudSun className="w-3.5 h-3.5" /> Weather desk
+          </a>
+        </div>
+        <div className="mt-2 text-[11px] font-mono text-muted-foreground">
+          Sign-on alert 7:30 AM ET · Sign-off warning 9:00 PM ET
+          {notificationPermission() === "denied" && " · notifications blocked in browser settings"}
+        </div>
       </header>
+
 
       <div className="panel p-6 md:p-10">
         <div className="flex items-end justify-between mb-6">
@@ -185,6 +241,10 @@ function Home() {
           </div>
         )}
       </div>
+
+      <WeatherSection />
+
+
 
       <footer className="mt-12 text-center text-xs font-mono text-muted-foreground opacity-70 space-y-1">
         <div>Made by James Degenhardt</div>
