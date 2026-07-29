@@ -55,8 +55,13 @@ function StationPage() {
   const stoppedRef = useRef(false);
   const activeSourceRef = useRef<"audio" | "yt" | null>(null);
   const currentYTIdRef = useRef<string | null>(null);
+  const currentSongIdRef = useRef<string | null>(null);
   const adPlayingRef = useRef(false);
+  const transitionRef = useRef(false);
+  const fadeLevelRef = useRef(1);
+  const fadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playedAdKeysRef = useRef<Set<string>>(new Set());
+
 
   // Songs list (respecting HD-2 reshuffle).
   const songs = useMemo(
