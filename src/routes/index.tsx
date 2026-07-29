@@ -140,7 +140,29 @@ function Home() {
             </div>
           </div>
         )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <button
+            onClick={toggleNotifications}
+            disabled={notifBusy}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-amber/40 bg-amber/5 text-amber text-xs font-mono uppercase tracking-widest disabled:opacity-50"
+          >
+            {notifOn ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+            {notifOn ? "Daily alerts on" : "Turn on daily alerts"}
+          </button>
+          <a
+            href="#weather"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-border text-muted-foreground text-xs font-mono uppercase tracking-widest hover:text-amber hover:border-amber/50"
+          >
+            <CloudSun className="w-3.5 h-3.5" /> Weather desk
+          </a>
+        </div>
+        <div className="mt-2 text-[11px] font-mono text-muted-foreground">
+          Sign-on alert 7:30 AM ET · Sign-off warning 9:00 PM ET
+          {notificationPermission() === "denied" && " · notifications blocked in browser settings"}
+        </div>
       </header>
+
 
       <div className="panel p-6 md:p-10">
         <div className="flex items-end justify-between mb-6">
