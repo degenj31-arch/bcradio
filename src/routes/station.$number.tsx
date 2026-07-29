@@ -374,7 +374,7 @@ function StationPage() {
       return;
     }
 
-    try { await syncAndPlay(); }
+    try { await syncAndPlay({ force: true, fadeIn: true }); }
     catch (e) {
       console.error("playback error", e);
       setError(e instanceof Error ? e.message : "Playback failed");
