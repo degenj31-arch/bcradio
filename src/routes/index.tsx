@@ -35,6 +35,8 @@ function Home() {
   const [canInstall, setCanInstall] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [, setTick] = useState(0);
+  const [notifOn, setNotifOn] = useState(false);
+  const [notifBusy, setNotifBusy] = useState(false);
 
   useEffect(() => {
     supabase.from("stations").select("*").order("number")
@@ -43,8 +45,33 @@ function Home() {
 
   useEffect(() => {
     setInstalled(isStandalone());
+    isSubscribed().then(setNotifOn);
     return onInstallAvailability(setCanInstall);
   }, []);
+
+  const toggleNotifications = async () => {
+    setNotifBusy(true);
+    try {
+      if (notifOn) {
+        await disableBroadcastNotifications();
+        setNotifOn(false);
+        toast.success("Daily broadcast alerts turned off");
+      } else {
+        const res = await enableBroadcastNotifications();
+        if (res.ok) {
+          setNotifOn(true);
+          toast.success("You'll get sign-on and sign-off alerts every day");
+        } else {
+          toast.error(res.reason);
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update notifications");
+    } finally {
+      setNotifBusy(false);
+    }
+  };
+
 
   // Repaint listener counts every 2 seconds.
   useEffect(() => {
