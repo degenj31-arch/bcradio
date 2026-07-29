@@ -115,7 +115,7 @@ export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
                 { endpoint: s.endpoint, expirationTime: null, keys: { p256dh: s.p256dh, auth: s.auth } },
                 vapid,
               );
-              const res = await fetch(s.endpoint, payload);
+              const res = await fetch(s.endpoint, payload as unknown as RequestInit);
               if (res.status === 404 || res.status === 410) stale.push(s.endpoint);
               else if (res.ok) sent++;
             } catch (e) {

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StationNumberRouteImport } from './routes/station.$number'
+import { Route as ApiPublicHooksBroadcastNotifyRouteImport } from './routes/api/public/hooks/broadcast-notify'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,45 @@ const StationNumberRoute = StationNumberRouteImport.update({
   path: '/station/$number',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksBroadcastNotifyRoute =
+  ApiPublicHooksBroadcastNotifyRouteImport.update({
+    id: '/api/public/hooks/broadcast-notify',
+    path: '/api/public/hooks/broadcast-notify',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/station/$number': typeof StationNumberRoute
+  '/api/public/hooks/broadcast-notify': typeof ApiPublicHooksBroadcastNotifyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/station/$number': typeof StationNumberRoute
+  '/api/public/hooks/broadcast-notify': typeof ApiPublicHooksBroadcastNotifyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/station/$number': typeof StationNumberRoute
+  '/api/public/hooks/broadcast-notify': typeof ApiPublicHooksBroadcastNotifyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/station/$number'
+  fullPaths: '/' | '/station/$number' | '/api/public/hooks/broadcast-notify'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/station/$number'
-  id: '__root__' | '/' | '/station/$number'
+  to: '/' | '/station/$number' | '/api/public/hooks/broadcast-notify'
+  id:
+    | '__root__'
+    | '/'
+    | '/station/$number'
+    | '/api/public/hooks/broadcast-notify'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   StationNumberRoute: typeof StationNumberRoute
+  ApiPublicHooksBroadcastNotifyRoute: typeof ApiPublicHooksBroadcastNotifyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +80,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationNumberRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/broadcast-notify': {
+      id: '/api/public/hooks/broadcast-notify'
+      path: '/api/public/hooks/broadcast-notify'
+      fullPath: '/api/public/hooks/broadcast-notify'
+      preLoaderRoute: typeof ApiPublicHooksBroadcastNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   StationNumberRoute: StationNumberRoute,
+  ApiPublicHooksBroadcastNotifyRoute: ApiPublicHooksBroadcastNotifyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
