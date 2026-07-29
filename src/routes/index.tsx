@@ -242,6 +242,10 @@ function Home() {
         )}
       </div>
 
+      <WeatherSection />
+
+
+
       <footer className="mt-12 text-center text-xs font-mono text-muted-foreground opacity-70 space-y-1">
         <div>Made by James Degenhardt</div>
         <div className="opacity-60">© BCradio · {new Date().getFullYear()}</div>
