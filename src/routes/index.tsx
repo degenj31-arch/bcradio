@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Station } from "@/lib/radio";
 import { StudioModal } from "@/components/StudioModal";
 import { WeatherSection } from "@/components/WeatherSection";
+import { SignOffCountdown } from "@/components/SignOffCountdown";
 import { isOffAir, formatOffAirWindow } from "@/lib/youtube";
 import { onInstallAvailability, promptInstall, isStandalone } from "@/lib/pwa";
 import {
