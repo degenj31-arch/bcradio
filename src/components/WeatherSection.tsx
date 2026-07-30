@@ -105,13 +105,9 @@ export function WeatherSection() {
               <CloudSun className="w-6 h-6 text-amber" /> Local forecast
             </h2>
           </div>
-          <button
-            onClick={() => load(place)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest px-2.5 py-1.5 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </button>
-        </div>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+            {loading && !data ? "Loading…" : "Live · auto-updates every 10s"}
+          </div>
 
         {/* Location search */}
         <div className="relative mb-6">
