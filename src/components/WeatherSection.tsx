@@ -108,6 +108,8 @@ export function WeatherSection() {
           <div className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
             {loading && !data ? "Loading…" : "Live · auto-updates every 10s"}
           </div>
+        </div>
+
 
         {/* Location search */}
         <div className="relative mb-6">
