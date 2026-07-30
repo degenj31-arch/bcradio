@@ -45,11 +45,15 @@ export function WeatherSection() {
 
   useEffect(() => { load(place); }, [place, load]);
 
-  // Auto-refresh every 10 minutes.
+  // Auto-refresh every 10 seconds (silently — no loading flash).
   useEffect(() => {
-    const id = setInterval(() => load(place), 10 * 60 * 1000);
+    const id = setInterval(() => {
+      fetchWeather(place)
+        .then((d) => { setData(d); setUpdatedAt(new Date()); setError(null); })
+        .catch(() => { /* keep last good reading */ });
+    }, 10_000);
     return () => clearInterval(id);
-  }, [place, load]);
+  }, [place]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
