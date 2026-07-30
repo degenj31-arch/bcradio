@@ -6,7 +6,7 @@ import {
 } from "@/lib/weather";
 import {
   CloudSun, Search, MapPin, Wind, Droplets, Gauge, Eye, Sunrise, Sunset,
-  ThermometerSun, RefreshCw, AlertTriangle,
+  ThermometerSun, AlertTriangle,
 } from "lucide-react";
 
 const STORAGE_KEY = "bcradio.weather.place";
