@@ -6,7 +6,7 @@ import {
 } from "@/lib/weather";
 import {
   CloudSun, Search, MapPin, Wind, Droplets, Gauge, Eye, Sunrise, Sunset,
-  ThermometerSun, RefreshCw, AlertTriangle,
+  ThermometerSun, AlertTriangle,
 } from "lucide-react";
 
 const STORAGE_KEY = "bcradio.weather.place";
@@ -45,11 +45,15 @@ export function WeatherSection() {
 
   useEffect(() => { load(place); }, [place, load]);
 
-  // Auto-refresh every 10 minutes.
+  // Auto-refresh every 10 seconds (silently — no loading flash).
   useEffect(() => {
-    const id = setInterval(() => load(place), 10 * 60 * 1000);
+    const id = setInterval(() => {
+      fetchWeather(place)
+        .then((d) => { setData(d); setUpdatedAt(new Date()); setError(null); })
+        .catch(() => { /* keep last good reading */ });
+    }, 10_000);
     return () => clearInterval(id);
-  }, [place, load]);
+  }, [place]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -101,13 +105,11 @@ export function WeatherSection() {
               <CloudSun className="w-6 h-6 text-amber" /> Local forecast
             </h2>
           </div>
-          <button
-            onClick={() => load(place)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest px-2.5 py-1.5 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </button>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+            {loading && !data ? "Loading…" : "Live · auto-updates every 10s"}
+          </div>
         </div>
+
 
         {/* Location search */}
         <div className="relative mb-6">

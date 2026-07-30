@@ -9,6 +9,7 @@ import {
   fetchCommercials, findPendingCommercial, nextCommercialInfo, type Commercial,
 } from "@/lib/commercials";
 import { hd2Playlist, stationListenerCount } from "@/lib/listeners";
+import { SignOffCountdown } from "@/components/SignOffCountdown";
 import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone, Users, Clock } from "lucide-react";
 
 type StationSearch = { hd?: "2" };
@@ -407,14 +408,55 @@ function StationPage() {
     return () => clearInterval(id);
   }, [offAir, onSongEnded]);
 
+  // Mid-song commercial breaks: an ad can interrupt a song, with fades both ways.
   useEffect(() => {
-    if (!current || !("mediaSession" in navigator)) return;
+    if (needsGesture || offAir) return;
+    const id = setInterval(() => {
+      if (adPlayingRef.current || transitionRef.current) return;
+      if (!playing) return;
+      const pending = findPendingCommercial(commercials, playedAdKeysRef.current);
+      if (!pending) return;
+      playedAdKeysRef.current.add(pending.key);
+      transitionRef.current = true;
+      playAd(pending.commercial)
+        .catch((e) => console.error("[ad]", e))
+        .finally(() => { transitionRef.current = false; });
+    }, 4000);
+    return () => clearInterval(id);
+  }, [needsGesture, offAir, playing, commercials, playAd]);
+
+  // Feature 14 — rich lock-screen / CarPlay / Android Auto metadata.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const freq = station ? Number(station.number).toFixed(1) : "";
+    const ytId = ad ? ad.youtube_id : current?.youtube_id;
+    const artwork = ytId
+      ? [
+          { src: `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`, sizes: "320x180", type: "image/jpeg" },
+          { src: `https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`, sizes: "1280x720", type: "image/jpeg" },
+        ]
+      : [{ src: "/icon-512.png", sizes: "512x512", type: "image/png" }];
+
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: current.title,
-      artist: current.artist ?? station?.name ?? "BCradio",
-      album: `BCradio ${station ? Number(station.number).toFixed(1) : ""}${isHD2 ? " HD-2" : ""} FM`,
+      title: ad ? `${ad.title} (Commercial)` : current?.title ?? "BCradio",
+      artist: ad ? "BCradio Ad Break" : current?.artist || station?.name || "BCradio",
+      album: `BCradio ${freq}${isHD2 ? " HD-2" : ""} FM · Live`,
+      artwork,
     });
-  }, [current, station, isHD2]);
+    navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+
+    // Live broadcast: no seeking, no skipping — advertise that to the car head unit.
+    const noop = () => { /* live stream */ };
+    for (const action of ["pause", "seekbackward", "seekforward", "seekto", "previoustrack", "nexttrack", "stop"] as const) {
+      try { navigator.mediaSession.setActionHandler(action, noop); } catch { /* unsupported */ }
+    }
+    try { navigator.mediaSession.setActionHandler("play", noop); } catch { /* unsupported */ }
+    try {
+      const dur = ad ? Number(ad.duration_seconds) : Number(current?.duration_seconds ?? 0);
+      if (dur > 0) navigator.mediaSession.setPositionState({ duration: dur, position: Math.min(dur, progress * dur), playbackRate: 1 });
+    } catch { /* unsupported */ }
+  }, [current, ad, station, isHD2, playing, progress]);
+
 
   const toggleMute = () => {
     const next = !muted;
@@ -468,6 +510,10 @@ function StationPage() {
           {offAir ? "OFF AIR · NIGHT" : ad ? "AD BREAK" : "LIVE · SYNCED WORLDWIDE"}
         </div>
       </nav>
+
+      <div className="mb-4">
+        <SignOffCountdown compact />
+      </div>
 
       {/* On-air ticker */}
       <div className="panel px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs font-mono">

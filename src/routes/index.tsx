@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Station } from "@/lib/radio";
 import { StudioModal } from "@/components/StudioModal";
 import { WeatherSection } from "@/components/WeatherSection";
+import { SignOffCountdown } from "@/components/SignOffCountdown";
 import { isOffAir, formatOffAirWindow } from "@/lib/youtube";
 import { onInstallAvailability, promptInstall, isStandalone } from "@/lib/pwa";
 import {
@@ -102,19 +103,21 @@ function Home() {
   return (
     <div className="min-h-screen px-4 py-10 md:py-16 max-w-6xl mx-auto">
       <header className="text-center mb-12 md:mb-16">
-        <button
-          onClick={handleTitleClick}
-          className="inline-flex items-center gap-3 cursor-pointer select-none"
-          aria-label="BCradio"
-        >
+        <div className="inline-flex items-center gap-3 select-none">
           <Radio className="w-8 h-8 md:w-10 md:h-10 text-amber" />
           <h1 className="font-display text-5xl md:text-7xl tracking-tight dial-glow text-amber">
             BCradio
           </h1>
-        </button>
-        <p className="mt-3 text-muted-foreground text-sm md:text-base font-mono tracking-wide">
-          {isOffAir() ? "OFF AIR · SILENT HOURS" : "ON AIR · BROADCASTING WORLDWIDE"} · {new Date().getFullYear()}
-        </p>
+        </div>
+        <div>
+          <button
+            onClick={handleTitleClick}
+            className="mt-3 text-muted-foreground text-sm md:text-base font-mono tracking-wide cursor-pointer hover:text-amber transition-colors"
+            aria-label="Broadcast status"
+          >
+            {isOffAir() ? "OFF AIR · SILENT HOURS" : "ON AIR · BROADCASTING WORLDWIDE"} · {new Date().getFullYear()}
+          </button>
+        </div>
         <div className={`mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono border ${
           isOffAir() ? "border-amber/40 bg-amber/10 text-amber" : "border-border text-muted-foreground"
         }`}>
@@ -125,6 +128,11 @@ function Home() {
           <Users className="w-3.5 h-3.5" />
           <span>{totalListeners(stations).toLocaleString()} listeners across all stations</span>
         </div>
+
+        <div className="mt-6 max-w-md mx-auto">
+          <SignOffCountdown />
+        </div>
+
 
         {!installed && (
           <div className="mt-5">
