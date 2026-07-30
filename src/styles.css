@@ -118,3 +118,46 @@
   animation: static-flicker 0.15s linear infinite;
   pointer-events: none;
 }
+
+/* --- Sign-off countdown (last 10 minutes on air) --- */
+@keyframes signoff-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px oklch(0.58 0.24 26 / 35%), 0 0 40px -12px oklch(0.58 0.24 26 / 70%); }
+  50% { box-shadow: 0 0 0 1px oklch(0.62 0.26 26 / 60%), 0 0 70px -8px oklch(0.62 0.26 26 / 90%); }
+}
+@keyframes signoff-glow {
+  0%, 100% { text-shadow: 0 0 12px oklch(0.62 0.26 26 / 70%), 0 0 40px oklch(0.62 0.26 26 / 35%); }
+  50% { text-shadow: 0 0 22px oklch(0.66 0.27 26 / 95%), 0 0 70px oklch(0.66 0.27 26 / 55%); }
+}
+@keyframes signoff-blink { 0%, 45% { opacity: 1; } 55%, 100% { opacity: 0.15; } }
+@keyframes signoff-sweep { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
+@keyframes signoff-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1.5px); }
+  75% { transform: translateX(1.5px); }
+}
+
+.signoff-shell {
+  border-color: oklch(0.58 0.24 26 / 45%);
+  background:
+    radial-gradient(ellipse at top, oklch(0.35 0.14 26 / 35%) 0%, transparent 70%),
+    var(--color-panel);
+  animation: signoff-breathe 2.4s ease-in-out infinite;
+}
+.signoff-scan {
+  background-image: repeating-linear-gradient(0deg, transparent 0 3px, oklch(0.62 0.26 26 / 8%) 3px 4px);
+  mask-image: linear-gradient(to bottom, transparent, black, transparent);
+  animation: signoff-sweep 3.5s linear infinite;
+}
+.signoff-label { color: oklch(0.72 0.20 26); }
+.signoff-digits {
+  color: oklch(0.66 0.27 26);
+  animation: signoff-glow 1.6s ease-in-out infinite;
+  font-variant-numeric: tabular-nums;
+}
+.signoff-digits.signoff-urgent { animation: signoff-glow 0.7s ease-in-out infinite, signoff-shake 0.7s ease-in-out infinite; }
+.signoff-colon { animation: signoff-blink 1s steps(1, end) infinite; }
+.signoff-bar { background: linear-gradient(90deg, oklch(0.5 0.2 26), oklch(0.7 0.27 26)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .signoff-shell, .signoff-scan, .signoff-digits, .signoff-colon { animation: none; }
+}
