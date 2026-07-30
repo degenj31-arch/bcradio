@@ -510,6 +510,10 @@ function StationPage() {
         </div>
       </nav>
 
+      <div className="mb-4">
+        <SignOffCountdown compact />
+      </div>
+
       {/* On-air ticker */}
       <div className="panel px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs font-mono">
         <span className="inline-flex items-center gap-1.5 text-amber">
