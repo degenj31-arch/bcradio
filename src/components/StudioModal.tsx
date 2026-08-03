@@ -595,8 +595,25 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
 
       <form onSubmit={add} className="space-y-3 p-4 rounded-md border border-border bg-card/40">
         <div className="text-xs uppercase tracking-widest text-muted-foreground">New commercial</div>
-        <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
-          className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+        <div className="flex gap-2">
+          {(["youtube", "file"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setMode(m)}
+              className={`text-xs px-3 py-1.5 rounded-md border flex items-center gap-1.5 ${
+                mode === m ? "bg-amber/20 text-amber border-amber/40" : "bg-card border-border text-muted-foreground"
+              }`}>
+              {m === "youtube" ? <Youtube className="w-3.5 h-3.5" /> : <Upload className="w-3.5 h-3.5" />}
+              {m === "youtube" ? "YouTube link" : "Upload file"}
+            </button>
+          ))}
+        </div>
+        {mode === "youtube" ? (
+          <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
+            className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+        ) : (
+          <input name="file" type="file" accept="audio/*,video/*" required
+            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-amber file:text-primary-foreground" />
+        )}
+
         <div className="grid sm:grid-cols-2 gap-3">
           <input name="title" placeholder="Ad title (e.g. Local Diner Spot)" required
             className="bg-input border border-border rounded-md px-3 py-2" />
