@@ -191,7 +191,7 @@ export function StudioModal({ open, onClose }: Props) {
               Manage stations, upload songs, set the order broadcast worldwide.
             </p>
             <p className="text-[11px] font-mono text-muted-foreground mt-2">
-              Off-air window: {formatOffAirWindow()} — only static plays; broadcast resumes automatically.
+              Off-air window: {formatOffAirWindow()} — the air goes quiet; broadcast resumes automatically.
             </p>
           </div>
 
@@ -641,7 +641,7 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
               .join(" · ");
             return (
               <div key={c.id} className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-card border border-border">
-                <Youtube className="w-4 h-4 text-red-500 shrink-0" />
+                {c.youtube_id ? <Youtube className="w-4 h-4 text-red-500 shrink-0" /> : <Upload className="w-4 h-4 text-amber shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{c.title}</div>
                   <div className="text-xs font-mono text-muted-foreground truncate">
