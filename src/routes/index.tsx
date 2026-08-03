@@ -167,6 +167,14 @@ function Home() {
             {notifOn ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
             {notifOn ? "Daily alerts on" : "Turn on daily alerts"}
           </button>
+          <button
+            onClick={() => setRequestsOpen((v) => !v)}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full border text-xs font-mono uppercase tracking-widest transition ${
+              requestsOpen ? "border-amber/50 bg-amber/10 text-amber" : "border-border text-muted-foreground hover:text-amber hover:border-amber/50"
+            }`}
+          >
+            <ListMusic className="w-3.5 h-3.5" /> Request line
+          </button>
           <a
             href="#weather"
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-border text-muted-foreground text-xs font-mono uppercase tracking-widest hover:text-amber hover:border-amber/50"
@@ -176,7 +184,11 @@ function Home() {
         </div>
         <div className="mt-2 text-[11px] font-mono text-muted-foreground">
           Sign-on alert 7:30 AM ET · Sign-off warning 9:00 PM ET
-          {notificationPermission() === "denied" && " · notifications blocked in browser settings"}
+          {mounted && notificationPermission() === "denied" && " · notifications blocked in browser settings"}
+        </div>
+
+        <div className="mt-6 max-w-2xl mx-auto text-left">
+          <RequestsPanel open={requestsOpen} onClose={() => setRequestsOpen(false)} adminMode={requestAdmin} />
         </div>
       </header>
 
@@ -185,8 +197,25 @@ function Home() {
         <div className="flex items-end justify-between mb-6">
           <div>
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Stations</div>
-            <h2 className="font-display text-2xl md:text-3xl">Turn the dial</h2>
+            <h2
+              onClick={() => {
+                const next = dialTaps + 1;
+                setDialTaps(next);
+                if (next >= 3) {
+                  setDialTaps(0);
+                  setRequestAdmin((v) => {
+                    toast.success(v ? "Request moderation off" : "Request moderation on");
+                    return !v;
+                  });
+                }
+                setTimeout(() => setDialTaps(0), 1500);
+              }}
+              className={`font-display text-2xl md:text-3xl cursor-pointer select-none ${requestAdmin ? "text-amber" : ""}`}
+            >
+              Turn the dial
+            </h2>
           </div>
+
           <div className="hidden md:block text-xs font-mono text-muted-foreground">
             {stations.length} FREQUENCIES
           </div>
