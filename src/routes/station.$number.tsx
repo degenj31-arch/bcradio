@@ -3,14 +3,15 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Station, Song } from "@/lib/radio";
 import { currentPlayhead, getPlayableUrl, fmtTime } from "@/lib/radio";
-import { startStatic } from "@/lib/static-noise";
 import { loadYouTubeAPI, isOffAir, msUntilOnAir, formatOffAirWindow, etParts } from "@/lib/youtube";
 import {
-  fetchCommercials, findPendingCommercial, nextCommercialInfo, type Commercial,
+  fetchCommercials, activeCommercial, nextCommercialInfo, type Commercial,
 } from "@/lib/commercials";
 import { hd2Playlist, stationListenerCount } from "@/lib/listeners";
 import { SignOffCountdown } from "@/components/SignOffCountdown";
+import { TuningDial } from "@/components/TuningDial";
 import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone, Users, Clock } from "lucide-react";
+
 
 type StationSearch = { hd?: "2" };
 
