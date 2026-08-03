@@ -40,6 +40,11 @@ function Home() {
   const [, setTick] = useState(0);
   const [notifOn, setNotifOn] = useState(false);
   const [notifBusy, setNotifBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  const [requestAdmin, setRequestAdmin] = useState(false);
+  const [dialTaps, setDialTaps] = useState(0);
+
 
   useEffect(() => {
     supabase.from("stations").select("*").order("number")
