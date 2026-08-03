@@ -52,10 +52,12 @@ function Home() {
   }, [studioOpen]);
 
   useEffect(() => {
+    setMounted(true);
     setInstalled(isStandalone());
     isSubscribed().then(setNotifOn);
     return onInstallAvailability(setCanInstall);
   }, []);
+
 
   const toggleNotifications = async () => {
     setNotifBusy(true);
