@@ -62,7 +62,7 @@ function StationPage() {
   const transitionRef = useRef(false);
   const fadeLevelRef = useRef(1);
   const fadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const playedAdKeysRef = useRef<Set<string>>(new Set());
+  
 
 
   // Songs list (respecting HD-2 reshuffle).
@@ -600,7 +600,12 @@ function StationPage() {
               </div>
             </div>
           ) : tuning ? (
-            <div className="font-mono text-sm text-muted-foreground animate-pulse">⟨ tuning in… ⟩</div>
+            <TuningDial
+              frequency={station ? Number(station.number) : 88.1}
+              color={station?.color ?? "#f59e0b"}
+              label={station?.name}
+            />
+
           ) : ad ? (
             <>
               <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-amber">
