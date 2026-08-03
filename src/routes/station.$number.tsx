@@ -3,14 +3,15 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Station, Song } from "@/lib/radio";
 import { currentPlayhead, getPlayableUrl, fmtTime } from "@/lib/radio";
-import { startStatic } from "@/lib/static-noise";
 import { loadYouTubeAPI, isOffAir, msUntilOnAir, formatOffAirWindow, etParts } from "@/lib/youtube";
 import {
-  fetchCommercials, findPendingCommercial, nextCommercialInfo, type Commercial,
+  fetchCommercials, activeCommercial, nextCommercialInfo, type Commercial,
 } from "@/lib/commercials";
 import { hd2Playlist, stationListenerCount } from "@/lib/listeners";
 import { SignOffCountdown } from "@/components/SignOffCountdown";
+import { TuningDial } from "@/components/TuningDial";
 import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone, Users, Clock } from "lucide-react";
+
 
 type StationSearch = { hd?: "2" };
 
@@ -51,8 +52,8 @@ function StationPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
-  const staticRef = useRef<ReturnType<typeof startStatic> | null>(null);
-  const offAirStaticRef = useRef<ReturnType<typeof startStatic> | null>(null);
+  const activeAdKeyRef = useRef<string | null>(null);
+
   const stoppedRef = useRef(false);
   const activeSourceRef = useRef<"audio" | "yt" | null>(null);
   const currentYTIdRef = useRef<string | null>(null);
@@ -61,7 +62,7 @@ function StationPage() {
   const transitionRef = useRef(false);
   const fadeLevelRef = useRef(1);
   const fadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const playedAdKeysRef = useRef<Set<string>>(new Set());
+  
 
 
   // Songs list (respecting HD-2 reshuffle).
@@ -83,10 +84,8 @@ function StationPage() {
     })();
     return () => {
       stoppedRef.current = true;
-      staticRef.current?.stop();
-      offAirStaticRef.current?.stop();
-      staticRef.current = null;
-      offAirStaticRef.current = null;
+      activeAdKeyRef.current = null;
+
       const a = audioRef.current;
       if (a) { a.pause(); a.src = ""; }
       try { ytPlayerRef.current?.destroy(); } catch { /* noop */ }
@@ -206,13 +205,13 @@ function StationPage() {
     applyVolume();
   }, [ensureYT, muted, applyVolume]);
 
-  const playAudioFile = useCallback(async (song: Song, offset: number) => {
+  const playAudioPath = useCallback(async (path: string, offset: number) => {
     try { ytPlayerRef.current?.pauseVideo(); } catch { /* noop */ }
     currentYTIdRef.current = null;
     activeSourceRef.current = "audio";
     const audio = audioRef.current;
-    if (!audio || !song.audio_url) return;
-    const url = await getPlayableUrl(song.audio_url);
+    if (!audio) return;
+    const url = await getPlayableUrl(path);
     if (stoppedRef.current) return;
     if (audio.src !== url) {
       audio.src = url;
@@ -228,6 +227,11 @@ function StationPage() {
     await audio.play();
     setPlaying(true);
   }, [applyVolume]);
+
+  const playAudioFile = useCallback(async (song: Song, offset: number) => {
+    if (!song.audio_url) return;
+    await playAudioPath(song.audio_url, offset);
+  }, [playAudioPath]);
 
   // Live position of the active source, or null when it isn't actually running.
   const livePosition = useCallback((): number | null => {
@@ -245,16 +249,19 @@ function StationPage() {
     return null;
   }, []);
 
-  // Play a commercial from the beginning — fade the song down first.
-  const playAd = useCallback(async (c: Commercial) => {
+  // Commercials are clock-driven like songs: everyone joins the break at the
+  // same offset, so ad playback is synchronized worldwide.
+  const playAd = useCallback(async (c: Commercial, offset: number) => {
     adPlayingRef.current = true;
-    await fadeTo(0, 900);
+    await fadeTo(0, 700);
     setAd(c);
     setCurrent(null);
     currentSongIdRef.current = null;
-    await playYouTube(c.youtube_id, 0);
-    await fadeTo(1, 900);
-  }, [playYouTube, fadeTo]);
+    if (c.youtube_id) await playYouTube(c.youtube_id, offset);
+    else if (c.audio_url) await playAudioPath(c.audio_url, offset);
+    await fadeTo(1, 700);
+  }, [playYouTube, playAudioPath, fadeTo]);
+
 
   // Without `force`, this only nudges drift so steady playback never stutters.
   const syncAndPlay = useCallback(async (opts?: { force?: boolean; fadeIn?: boolean }) => {
@@ -294,29 +301,17 @@ function StationPage() {
     if (opts?.fadeIn) await fadeTo(1, 900);
   }, [songs, playYouTube, playAudioFile, livePosition, fadeTo, applyVolume]);
 
-  // After a song ends: fire a pending commercial, or advance to the next song.
+  // After a song ends, advance to whatever the world clock says is next.
   const onSongEnded = useCallback(async () => {
     if (stoppedRef.current || offAir) return;
-    if (transitionRef.current) return;
+    if (transitionRef.current || adPlayingRef.current) return;
     transitionRef.current = true;
     try {
-      if (adPlayingRef.current) {
-        adPlayingRef.current = false;
-        await fadeTo(0, 400);
-        await syncAndPlay({ force: true, fadeIn: true }).catch((e) => console.error("[resume]", e));
-        return;
-      }
-      const pending = findPendingCommercial(commercials, playedAdKeysRef.current);
-      if (pending) {
-        playedAdKeysRef.current.add(pending.key);
-        await playAd(pending.commercial).catch((e) => console.error("[ad]", e));
-        return;
-      }
       await syncAndPlay({ force: true }).catch((e) => console.error("[advance]", e));
     } finally {
       transitionRef.current = false;
     }
-  }, [commercials, offAir, playAd, syncAndPlay, fadeTo]);
+  }, [offAir, syncAndPlay]);
 
   const stopSong = useCallback(() => {
     const a = audioRef.current;
@@ -330,17 +325,11 @@ function StationPage() {
     if (offAir) {
       stopSong();
       adPlayingRef.current = false;
+      activeAdKeyRef.current = null;
       setAd(null);
       currentSongIdRef.current = null;
-      if (!offAirStaticRef.current) {
-        try { offAirStaticRef.current = startStatic(0.35); } catch { /* noop */ }
-      }
-    } else {
-      offAirStaticRef.current?.stop();
-      offAirStaticRef.current = null;
-      if (!playing && !adPlayingRef.current) {
-        syncAndPlay({ force: true }).catch((e) => console.error(e));
-      }
+    } else if (!playing && !adPlayingRef.current) {
+      syncAndPlay({ force: true }).catch((e) => console.error(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offAir, needsGesture, songs.length]);
@@ -361,28 +350,32 @@ function StationPage() {
     setNeedsGesture(false);
     setTuning(true);
     setError(null);
-    try { staticRef.current = startStatic(0.5); } catch { staticRef.current = null; }
 
-    await new Promise((r) => setTimeout(r, 2000));
+    // Let the dial ceremony play out before the audio lands.
+    await new Promise((r) => setTimeout(r, 2200));
     if (stoppedRef.current) return;
 
     if (isOffAir()) {
       setOffAir(true);
-      staticRef.current?.stop();
-      staticRef.current = null;
-      try { offAirStaticRef.current = startStatic(0.35); } catch { /* noop */ }
       setTuning(false);
       return;
     }
 
-    try { await syncAndPlay({ force: true, fadeIn: true }); }
-    catch (e) {
+    try {
+      const act = activeCommercial(commercials);
+      if (act) {
+        activeAdKeyRef.current = act.key;
+        await playAd(act.commercial, act.offset);
+      } else {
+        await syncAndPlay({ force: true, fadeIn: true });
+      }
+    } catch (e) {
       console.error("playback error", e);
       setError(e instanceof Error ? e.message : "Playback failed");
     }
-    staticRef.current?.fadeOut(0.8);
     setTuning(false);
-  }, [station, syncAndPlay]);
+  }, [station, syncAndPlay, commercials, playAd]);
+
 
   // Progress + end detection.
   useEffect(() => {
@@ -408,22 +401,52 @@ function StationPage() {
     return () => clearInterval(id);
   }, [offAir, onSongEnded]);
 
-  // Mid-song commercial breaks: an ad can interrupt a song, with fades both ways.
+  // Clock-driven commercial breaks. Every device enters and leaves the break at
+  // the same instant, at the same offset into the ad — fully synchronized.
   useEffect(() => {
     if (needsGesture || offAir) return;
     const id = setInterval(() => {
-      if (adPlayingRef.current || transitionRef.current) return;
-      if (!playing) return;
-      const pending = findPendingCommercial(commercials, playedAdKeysRef.current);
-      if (!pending) return;
-      playedAdKeysRef.current.add(pending.key);
-      transitionRef.current = true;
-      playAd(pending.commercial)
-        .catch((e) => console.error("[ad]", e))
-        .finally(() => { transitionRef.current = false; });
-    }, 4000);
+      if (transitionRef.current) return;
+      const act = activeCommercial(commercials);
+      const running = activeAdKeyRef.current;
+
+      if (act && act.key !== running) {
+        activeAdKeyRef.current = act.key;
+        transitionRef.current = true;
+        playAd(act.commercial, act.offset)
+          .catch((e) => console.error("[ad]", e))
+          .finally(() => { transitionRef.current = false; });
+        return;
+      }
+
+      if (!act && running) {
+        activeAdKeyRef.current = null;
+        adPlayingRef.current = false;
+        transitionRef.current = true;
+        (async () => {
+          await fadeTo(0, 400);
+          await syncAndPlay({ force: true, fadeIn: true });
+        })()
+          .catch((e) => console.error("[resume]", e))
+          .finally(() => { transitionRef.current = false; });
+        return;
+      }
+
+      // Keep the running ad locked to the global clock.
+      if (act && act.key === running) {
+        const pos = livePosition();
+        if (pos != null && Math.abs(pos - act.offset) > 2.5) {
+          if (activeSourceRef.current === "audio" && audioRef.current) {
+            try { audioRef.current.currentTime = act.offset; } catch { /* noop */ }
+          } else if (activeSourceRef.current === "yt" && ytPlayerRef.current) {
+            try { ytPlayerRef.current.seekTo(act.offset, true); } catch { /* noop */ }
+          }
+        }
+      }
+    }, 1000);
     return () => clearInterval(id);
-  }, [needsGesture, offAir, playing, commercials, playAd]);
+  }, [needsGesture, offAir, commercials, playAd, syncAndPlay, fadeTo, livePosition]);
+
 
   // Feature 14 — rich lock-screen / CarPlay / Android Auto metadata.
   useEffect(() => {
@@ -577,7 +600,12 @@ function StationPage() {
               </div>
             </div>
           ) : tuning ? (
-            <div className="font-mono text-sm text-muted-foreground animate-pulse">⟨ tuning in… ⟩</div>
+            <TuningDial
+              frequency={station ? Number(station.number) : 88.1}
+              color={station?.color ?? "#f59e0b"}
+              label={station?.name}
+            />
+
           ) : ad ? (
             <>
               <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-amber">

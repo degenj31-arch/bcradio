@@ -48,8 +48,18 @@ export async function enableBroadcastNotifications(): Promise<
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return { ok: false, reason: "Notification permission denied." };
 
-  const reg = await navigator.serviceWorker.ready.catch(() => null);
-  if (!reg) return { ok: false, reason: "Notifications only work in the installed BCradio app." };
+  // Make sure a service worker actually exists before waiting on `ready`
+  // (otherwise the promise hangs forever and nothing ever subscribes).
+  let reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+  if (!reg) {
+    reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => null);
+  }
+  if (!reg) {
+    return { ok: false, reason: "Notifications need the installed BCradio app (open bcradio.lovable.app directly, then Install)." };
+  }
+  await navigator.serviceWorker.ready.catch(() => null);
+  reg = (await navigator.serviceWorker.getRegistration()) ?? reg;
+
 
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {

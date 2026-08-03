@@ -4,7 +4,8 @@ import { etSecondsOfDay, parseScheduleTime, RADIO_TIMEZONE } from "@/lib/youtube
 export type Commercial = {
   id: string;
   title: string;
-  youtube_id: string;
+  youtube_id: string | null;
+  audio_url: string | null;
   duration_seconds: number;
   schedule_times: string[];
   active: boolean;
@@ -28,34 +29,34 @@ export function etDateKey(d: Date = new Date()): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-// Find a scheduled commercial slot that has recently fired (within `windowMinutes`)
-// and hasn't yet been played (per `playedKeys`). Returns the most recent unplayed
-// slot. Commercials play AFTER the current song finishes, so they may desync
-// between listeners — that's intentional.
-export function findPendingCommercial(
+export type ActiveCommercial = { commercial: Commercial; key: string; offset: number };
+
+// A commercial is "on air" for exactly its duration starting at its scheduled
+// ET time. Every device computes the same slot and the same playback offset,
+// so ad breaks are synchronized worldwide just like songs are.
+export function activeCommercial(
   commercials: Commercial[],
-  playedKeys: Set<string>,
-  now: Date = new Date(),
-  windowMinutes: number = 45
-): { commercial: Commercial; key: string } | null {
+  now: Date = new Date()
+): ActiveCommercial | null {
   const sec = etSecondsOfDay(now);
   const dateKey = etDateKey(now);
-  const windowSec = windowMinutes * 60;
-  let best: { commercial: Commercial; key: string; delta: number } | null = null;
+  let best: ActiveCommercial | null = null;
   for (const c of commercials) {
     if (!c.active) continue;
-    if (!(Number(c.duration_seconds) > 0)) continue;
+    const dur = Number(c.duration_seconds);
+    if (!(dur > 0)) continue;
+    if (!c.youtube_id && !c.audio_url) continue;
     for (const s of c.schedule_times) {
       const target = parseScheduleTime(s);
       if (target == null) continue;
-      const delta = sec - target;
-      if (delta < 0 || delta > windowSec) continue;
-      const key = `${c.id}:${dateKey}:${target}`;
-      if (playedKeys.has(key)) continue;
-      if (!best || delta < best.delta) best = { commercial: c, key, delta };
+      const offset = sec - target;
+      if (offset < 0 || offset >= dur) continue;
+      const cand = { commercial: c, key: `${c.id}:${dateKey}:${target}`, offset };
+      // If two ads overlap, the one that started most recently wins.
+      if (!best || cand.offset < best.offset) best = cand;
     }
   }
-  return best ? { commercial: best.commercial, key: best.key } : null;
+  return best;
 }
 
 // Milliseconds until the next scheduled commercial slot fires (looking up to 24h ahead).
@@ -77,4 +78,3 @@ export function nextCommercialInfo(
   }
   return best ? { commercial: best.commercial, msUntil: best.delta * 1000, scheduleSec: best.scheduleSec } : null;
 }
-
