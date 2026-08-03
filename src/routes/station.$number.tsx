@@ -401,22 +401,52 @@ function StationPage() {
     return () => clearInterval(id);
   }, [offAir, onSongEnded]);
 
-  // Mid-song commercial breaks: an ad can interrupt a song, with fades both ways.
+  // Clock-driven commercial breaks. Every device enters and leaves the break at
+  // the same instant, at the same offset into the ad — fully synchronized.
   useEffect(() => {
     if (needsGesture || offAir) return;
     const id = setInterval(() => {
-      if (adPlayingRef.current || transitionRef.current) return;
-      if (!playing) return;
-      const pending = findPendingCommercial(commercials, playedAdKeysRef.current);
-      if (!pending) return;
-      playedAdKeysRef.current.add(pending.key);
-      transitionRef.current = true;
-      playAd(pending.commercial)
-        .catch((e) => console.error("[ad]", e))
-        .finally(() => { transitionRef.current = false; });
-    }, 4000);
+      if (transitionRef.current) return;
+      const act = activeCommercial(commercials);
+      const running = activeAdKeyRef.current;
+
+      if (act && act.key !== running) {
+        activeAdKeyRef.current = act.key;
+        transitionRef.current = true;
+        playAd(act.commercial, act.offset)
+          .catch((e) => console.error("[ad]", e))
+          .finally(() => { transitionRef.current = false; });
+        return;
+      }
+
+      if (!act && running) {
+        activeAdKeyRef.current = null;
+        adPlayingRef.current = false;
+        transitionRef.current = true;
+        (async () => {
+          await fadeTo(0, 400);
+          await syncAndPlay({ force: true, fadeIn: true });
+        })()
+          .catch((e) => console.error("[resume]", e))
+          .finally(() => { transitionRef.current = false; });
+        return;
+      }
+
+      // Keep the running ad locked to the global clock.
+      if (act && act.key === running) {
+        const pos = livePosition();
+        if (pos != null && Math.abs(pos - act.offset) > 2.5) {
+          if (activeSourceRef.current === "audio" && audioRef.current) {
+            try { audioRef.current.currentTime = act.offset; } catch { /* noop */ }
+          } else if (activeSourceRef.current === "yt" && ytPlayerRef.current) {
+            try { ytPlayerRef.current.seekTo(act.offset, true); } catch { /* noop */ }
+          }
+        }
+      }
+    }, 1000);
     return () => clearInterval(id);
-  }, [needsGesture, offAir, playing, commercials, playAd]);
+  }, [needsGesture, offAir, commercials, playAd, syncAndPlay, fadeTo, livePosition]);
+
 
   // Feature 14 — rich lock-screen / CarPlay / Android Auto metadata.
   useEffect(() => {
