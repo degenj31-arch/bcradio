@@ -17,33 +17,36 @@ export type Database = {
       commercials: {
         Row: {
           active: boolean
+          audio_url: string | null
           created_at: string
           duration_seconds: number
           id: string
           schedule_times: string[]
           title: string
           updated_at: string
-          youtube_id: string
+          youtube_id: string | null
         }
         Insert: {
           active?: boolean
+          audio_url?: string | null
           created_at?: string
           duration_seconds: number
           id?: string
           schedule_times?: string[]
           title: string
           updated_at?: string
-          youtube_id: string
+          youtube_id?: string | null
         }
         Update: {
           active?: boolean
+          audio_url?: string | null
           created_at?: string
           duration_seconds?: number
           id?: string
           schedule_times?: string[]
           title?: string
           updated_at?: string
-          youtube_id?: string
+          youtube_id?: string | null
         }
         Relationships: []
       }
@@ -95,6 +98,30 @@ export type Database = {
           p256dh?: string
           updated_at?: string
           user_agent?: string | null
+        }
+        Relationships: []
+      }
+      song_requests: {
+        Row: {
+          artist: string | null
+          created_at: string
+          id: string
+          requester: string | null
+          title: string
+        }
+        Insert: {
+          artist?: string | null
+          created_at?: string
+          id?: string
+          requester?: string | null
+          title: string
+        }
+        Update: {
+          artist?: string | null
+          created_at?: string
+          id?: string
+          requester?: string | null
+          title?: string
         }
         Relationships: []
       }
