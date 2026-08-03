@@ -301,29 +301,17 @@ function StationPage() {
     if (opts?.fadeIn) await fadeTo(1, 900);
   }, [songs, playYouTube, playAudioFile, livePosition, fadeTo, applyVolume]);
 
-  // After a song ends: fire a pending commercial, or advance to the next song.
+  // After a song ends, advance to whatever the world clock says is next.
   const onSongEnded = useCallback(async () => {
     if (stoppedRef.current || offAir) return;
-    if (transitionRef.current) return;
+    if (transitionRef.current || adPlayingRef.current) return;
     transitionRef.current = true;
     try {
-      if (adPlayingRef.current) {
-        adPlayingRef.current = false;
-        await fadeTo(0, 400);
-        await syncAndPlay({ force: true, fadeIn: true }).catch((e) => console.error("[resume]", e));
-        return;
-      }
-      const pending = findPendingCommercial(commercials, playedAdKeysRef.current);
-      if (pending) {
-        playedAdKeysRef.current.add(pending.key);
-        await playAd(pending.commercial).catch((e) => console.error("[ad]", e));
-        return;
-      }
       await syncAndPlay({ force: true }).catch((e) => console.error("[advance]", e));
     } finally {
       transitionRef.current = false;
     }
-  }, [commercials, offAir, playAd, syncAndPlay, fadeTo]);
+  }, [offAir, syncAndPlay]);
 
   const stopSong = useCallback(() => {
     const a = audioRef.current;
@@ -337,17 +325,11 @@ function StationPage() {
     if (offAir) {
       stopSong();
       adPlayingRef.current = false;
+      activeAdKeyRef.current = null;
       setAd(null);
       currentSongIdRef.current = null;
-      if (!offAirStaticRef.current) {
-        try { offAirStaticRef.current = startStatic(0.35); } catch { /* noop */ }
-      }
-    } else {
-      offAirStaticRef.current?.stop();
-      offAirStaticRef.current = null;
-      if (!playing && !adPlayingRef.current) {
-        syncAndPlay({ force: true }).catch((e) => console.error(e));
-      }
+    } else if (!playing && !adPlayingRef.current) {
+      syncAndPlay({ force: true }).catch((e) => console.error(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offAir, needsGesture, songs.length]);
@@ -368,28 +350,32 @@ function StationPage() {
     setNeedsGesture(false);
     setTuning(true);
     setError(null);
-    try { staticRef.current = startStatic(0.5); } catch { staticRef.current = null; }
 
-    await new Promise((r) => setTimeout(r, 2000));
+    // Let the dial ceremony play out before the audio lands.
+    await new Promise((r) => setTimeout(r, 2200));
     if (stoppedRef.current) return;
 
     if (isOffAir()) {
       setOffAir(true);
-      staticRef.current?.stop();
-      staticRef.current = null;
-      try { offAirStaticRef.current = startStatic(0.35); } catch { /* noop */ }
       setTuning(false);
       return;
     }
 
-    try { await syncAndPlay({ force: true, fadeIn: true }); }
-    catch (e) {
+    try {
+      const act = activeCommercial(commercials);
+      if (act) {
+        activeAdKeyRef.current = act.key;
+        await playAd(act.commercial, act.offset);
+      } else {
+        await syncAndPlay({ force: true, fadeIn: true });
+      }
+    } catch (e) {
       console.error("playback error", e);
       setError(e instanceof Error ? e.message : "Playback failed");
     }
-    staticRef.current?.fadeOut(0.8);
     setTuning(false);
-  }, [station, syncAndPlay]);
+  }, [station, syncAndPlay, commercials, playAd]);
+
 
   // Progress + end detection.
   useEffect(() => {
