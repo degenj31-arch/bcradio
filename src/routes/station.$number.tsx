@@ -205,13 +205,13 @@ function StationPage() {
     applyVolume();
   }, [ensureYT, muted, applyVolume]);
 
-  const playAudioFile = useCallback(async (song: Song, offset: number) => {
+  const playAudioPath = useCallback(async (path: string, offset: number) => {
     try { ytPlayerRef.current?.pauseVideo(); } catch { /* noop */ }
     currentYTIdRef.current = null;
     activeSourceRef.current = "audio";
     const audio = audioRef.current;
-    if (!audio || !song.audio_url) return;
-    const url = await getPlayableUrl(song.audio_url);
+    if (!audio) return;
+    const url = await getPlayableUrl(path);
     if (stoppedRef.current) return;
     if (audio.src !== url) {
       audio.src = url;
@@ -227,6 +227,11 @@ function StationPage() {
     await audio.play();
     setPlaying(true);
   }, [applyVolume]);
+
+  const playAudioFile = useCallback(async (song: Song, offset: number) => {
+    if (!song.audio_url) return;
+    await playAudioPath(song.audio_url, offset);
+  }, [playAudioPath]);
 
   // Live position of the active source, or null when it isn't actually running.
   const livePosition = useCallback((): number | null => {
@@ -244,16 +249,19 @@ function StationPage() {
     return null;
   }, []);
 
-  // Play a commercial from the beginning — fade the song down first.
-  const playAd = useCallback(async (c: Commercial) => {
+  // Commercials are clock-driven like songs: everyone joins the break at the
+  // same offset, so ad playback is synchronized worldwide.
+  const playAd = useCallback(async (c: Commercial, offset: number) => {
     adPlayingRef.current = true;
-    await fadeTo(0, 900);
+    await fadeTo(0, 700);
     setAd(c);
     setCurrent(null);
     currentSongIdRef.current = null;
-    await playYouTube(c.youtube_id, 0);
-    await fadeTo(1, 900);
-  }, [playYouTube, fadeTo]);
+    if (c.youtube_id) await playYouTube(c.youtube_id, offset);
+    else if (c.audio_url) await playAudioPath(c.audio_url, offset);
+    await fadeTo(1, 700);
+  }, [playYouTube, playAudioPath, fadeTo]);
+
 
   // Without `force`, this only nudges drift so steady playback never stutters.
   const syncAndPlay = useCallback(async (opts?: { force?: boolean; fadeIn?: boolean }) => {
