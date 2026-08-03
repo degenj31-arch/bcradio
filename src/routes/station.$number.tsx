@@ -84,10 +84,8 @@ function StationPage() {
     })();
     return () => {
       stoppedRef.current = true;
-      staticRef.current?.stop();
-      offAirStaticRef.current?.stop();
-      staticRef.current = null;
-      offAirStaticRef.current = null;
+      activeAdKeyRef.current = null;
+
       const a = audioRef.current;
       if (a) { a.pause(); a.src = ""; }
       try { ytPlayerRef.current?.destroy(); } catch { /* noop */ }
