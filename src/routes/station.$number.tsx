@@ -52,8 +52,8 @@ function StationPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
-  const staticRef = useRef<ReturnType<typeof startStatic> | null>(null);
-  const offAirStaticRef = useRef<ReturnType<typeof startStatic> | null>(null);
+  const activeAdKeyRef = useRef<string | null>(null);
+
   const stoppedRef = useRef(false);
   const activeSourceRef = useRef<"audio" | "yt" | null>(null);
   const currentYTIdRef = useRef<string | null>(null);
