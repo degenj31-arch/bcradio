@@ -517,30 +517,44 @@ function SongRow({ song, index, onMove, onDelete, onUpdate }: {
 
 function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial[]; onChanged: () => void }) {
   const [adding, setAdding] = useState(false);
+  const [mode, setMode] = useState<"youtube" | "file">("youtube");
 
   const add = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);
-    const url = String(fd.get("url") || "").trim();
     const title = String(fd.get("title") || "").trim();
     const timesRaw = String(fd.get("times") || "").trim();
-    const videoId = parseYouTubeId(url);
-    if (!videoId) return toast.error("Paste a valid YouTube URL");
     if (!title) return toast.error("Title required");
     const times = timesRaw.split(",").map((s) => s.trim()).filter(Boolean);
     for (const t of times) {
       if (parseScheduleTime(t) == null) return toast.error(`Bad time "${t}" — use HH:MM 24-hour, e.g. 12:00, 21:00`);
     }
     if (!times.length) return toast.error("Add at least one schedule time (e.g. 12:00, 21:00)");
+
     setAdding(true);
     try {
-      toast.message("Reading video length…");
-      let duration = 30;
-      try { duration = await fetchYouTubeDuration(videoId); }
-      catch { toast.error("Could not read length — using 30s."); }
+      let payload: { youtube_id: string | null; audio_url: string | null; duration_seconds: number };
+      if (mode === "youtube") {
+        const videoId = parseYouTubeId(String(fd.get("url") || "").trim());
+        if (!videoId) throw new Error("Paste a valid YouTube URL");
+        toast.message("Reading video length…");
+        let duration = 30;
+        try { duration = await fetchYouTubeDuration(videoId); }
+        catch { toast.error("Could not read length — using 30s."); }
+        payload = { youtube_id: videoId, audio_url: null, duration_seconds: duration };
+      } else {
+        const file = fd.get("file");
+        if (!(file instanceof File) || !file.size) throw new Error("Choose an audio or video file");
+        toast.message("Reading file length…");
+        const duration = await extractDuration(file);
+        toast.message("Uploading…");
+        const path = await uploadAudio(file);
+        payload = { youtube_id: null, audio_url: path, duration_seconds: duration };
+      }
+
       const { error } = await supabase.from("commercials").insert({
-        title, youtube_id: videoId, duration_seconds: duration, schedule_times: times, active: true,
+        title, schedule_times: times, active: true, ...payload,
       });
       if (error) throw error;
       toast.success(`Commercial "${title}" scheduled`);
@@ -550,6 +564,7 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
       toast.error(err instanceof Error ? err.message : "Failed to add");
     } finally { setAdding(false); }
   };
+
 
   const toggle = async (c: Commercial) => {
     const { error } = await supabase.from("commercials").update({ active: !c.active }).eq("id", c.id);
