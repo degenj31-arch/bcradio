@@ -549,13 +549,13 @@ function StationPage() {
   const listeners = station ? stationListenerCount(station) : 0;
 
   return (
-    <div className="min-h-screen px-3 sm:px-4 py-6 sm:py-8 max-w-3xl mx-auto">
+    <div className="min-h-screen px-3 sm:px-4 pt-16 pb-6 sm:pt-20 sm:pb-8 max-w-3xl mx-auto">
       <nav className="flex items-center justify-between mb-4 sm:mb-6">
         <button onClick={() => navigate({ to: "/" })} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm">
-          <ArrowLeft className="w-4 h-4" /> Dial
+          <ArrowLeft className="w-4 h-4" /> {t("dial")}
         </button>
         <div className="font-mono text-[10px] sm:text-xs text-muted-foreground">
-          {offAir ? "OFF AIR · NIGHT" : ad ? "AD BREAK" : "LIVE · SYNCED WORLDWIDE"}
+          {offAir ? t("offAirNight") : ad ? t("adBreak") : t("live")}
         </div>
       </nav>
 
@@ -569,12 +569,12 @@ function StationPage() {
           <Clock className="w-3.5 h-3.5" /> {etTimeStr}
         </span>
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-          <Users className="w-3.5 h-3.5" /> {listeners.toLocaleString()} tuned in
+          <Users className="w-3.5 h-3.5" /> {nf(listeners)} {t("tunedIn")}
         </span>
         {nextAd && !offAir && (
           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
             <Megaphone className="w-3.5 h-3.5" />
-            Next break: {fmtCountdown(nextAd.msUntil)} · {nextAd.commercial.title}
+            {t("nextBreak")}: {fmtCountdown(nextAd.msUntil)} · {nextAd.commercial.title}
           </span>
         )}
       </div>
