@@ -11,6 +11,8 @@ import { hd2Playlist, stationListenerCount } from "@/lib/listeners";
 import { SignOffCountdown } from "@/components/SignOffCountdown";
 import { TuningDial } from "@/components/TuningDial";
 import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone, Users, Clock } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
+import { SongRating } from "@/components/SongRating";
 
 
 type StationSearch = { hd?: "2" };
@@ -30,10 +32,12 @@ export const Route = createFileRoute("/station/$number")({
 });
 
 function StationPage() {
+  const { t, nf } = useI18n();
   const { number } = Route.useParams();
   const { hd } = Route.useSearch();
   const isHD2 = hd === "2";
   const navigate = useNavigate();
+
 
   const [station, setStation] = useState<Station | null>(null);
   const [rawSongs, setRawSongs] = useState<Song[]>([]);
@@ -448,7 +452,13 @@ function StationPage() {
   }, [needsGesture, offAir, commercials, playAd, syncAndPlay, fadeTo, livePosition]);
 
 
-  // Feature 14 — rich lock-screen / CarPlay / Android Auto metadata.
+  // Rich lock-screen / CarPlay / Android Auto metadata.
+  // The embedded YouTube player publishes its own media session (the raw video
+  // title). We re-assert BCradio's metadata on a short interval so car head
+  // units always show the station's song title, never the YouTube title.
+  const progressRef = useRef(0);
+  progressRef.current = progress;
+
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
     const freq = station ? Number(station.number).toFixed(1) : "";
@@ -460,13 +470,30 @@ function StationPage() {
         ]
       : [{ src: "/icon-512.png", sizes: "512x512", type: "image/png" }];
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: ad ? `${ad.title} (Commercial)` : current?.title ?? "BCradio",
-      artist: ad ? "BCradio Ad Break" : current?.artist || station?.name || "BCradio",
-      album: `BCradio ${freq}${isHD2 ? " HD-2" : ""} FM · Live`,
-      artwork,
-    });
-    navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+    const title = ad ? `${ad.title} (${t("commercialBreak")})` : current?.title ?? "BCradio";
+    const artist = ad ? "BCradio" : current?.artist || station?.name || "BCradio";
+    const album = `BCradio ${freq}${isHD2 ? " HD-2" : ""} FM · Live`;
+
+    const apply = () => {
+      const md = navigator.mediaSession.metadata;
+      if (!md || md.title !== title || md.artist !== artist || md.album !== album) {
+        navigator.mediaSession.metadata = new MediaMetadata({ title, artist, album, artwork });
+      }
+      navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+      try {
+        const dur = ad ? Number(ad.duration_seconds) : Number(current?.duration_seconds ?? 0);
+        if (dur > 0) {
+          navigator.mediaSession.setPositionState({
+            duration: dur,
+            position: Math.min(dur, progressRef.current * dur),
+            playbackRate: 1,
+          });
+        }
+      } catch { /* unsupported */ }
+    };
+
+    apply();
+    const id = setInterval(apply, 2000);
 
     // Live broadcast: no seeking, no skipping — advertise that to the car head unit.
     const noop = () => { /* live stream */ };
@@ -474,11 +501,9 @@ function StationPage() {
       try { navigator.mediaSession.setActionHandler(action, noop); } catch { /* unsupported */ }
     }
     try { navigator.mediaSession.setActionHandler("play", noop); } catch { /* unsupported */ }
-    try {
-      const dur = ad ? Number(ad.duration_seconds) : Number(current?.duration_seconds ?? 0);
-      if (dur > 0) navigator.mediaSession.setPositionState({ duration: dur, position: Math.min(dur, progress * dur), playbackRate: 1 });
-    } catch { /* unsupported */ }
-  }, [current, ad, station, isHD2, playing, progress]);
+
+    return () => clearInterval(id);
+  }, [current, ad, station, isHD2, playing, t]);
 
 
   const toggleMute = () => {

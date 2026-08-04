@@ -15,6 +15,8 @@ import { stationListenerCount, totalListeners } from "@/lib/listeners";
 import { RequestsPanel } from "@/components/RequestsPanel";
 import { Radio, Moon, Download, Users, Bell, BellOff, CloudSun, ListMusic } from "lucide-react";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
+import { NetworkSection } from "@/components/NetworkSection";
 
 
 
@@ -32,6 +34,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  const { t, nf } = useI18n();
   const [stations, setStations] = useState<Station[]>([]);
   const [studioOpen, setStudioOpen] = useState(false);
   const [titleTaps, setTitleTaps] = useState(0);
@@ -110,7 +113,7 @@ function Home() {
   };
 
   return (
-    <div className="min-h-screen px-4 py-10 md:py-16 max-w-6xl mx-auto">
+    <div className="min-h-screen px-4 pt-16 pb-10 md:pt-20 md:pb-16 max-w-6xl mx-auto">
       <header className="text-center mb-12 md:mb-16">
         <div className="inline-flex items-center gap-3 select-none">
           <Radio className="w-8 h-8 md:w-10 md:h-10 text-amber" />
@@ -124,18 +127,18 @@ function Home() {
             className="mt-3 text-muted-foreground text-sm md:text-base font-mono tracking-wide cursor-pointer hover:text-amber transition-colors"
             aria-label="Broadcast status"
           >
-            {isOffAir() ? "OFF AIR · SILENT HOURS" : "ON AIR · BROADCASTING WORLDWIDE"} · {new Date().getFullYear()}
+            {isOffAir() ? t("offAirStatus") : t("onAir")} · {nf(new Date().getFullYear(), { useGrouping: false })}
           </button>
         </div>
         <div className={`mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono border ${
           isOffAir() ? "border-amber/40 bg-amber/10 text-amber" : "border-border text-muted-foreground"
         }`}>
           <Moon className="w-3.5 h-3.5" />
-          <span>Silent hours: {formatOffAirWindow()}</span>
+          <span>{t("silentHours")}: {t("silentHoursValue")}</span>
         </div>
         <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono border border-amber/30 bg-amber/5 text-amber ml-2">
           <Users className="w-3.5 h-3.5" />
-          <span>{totalListeners(stations).toLocaleString()} listeners across all stations</span>
+          <span>{nf(totalListeners(stations))} {t("listenersAll")}</span>
         </div>
 
         <div className="mt-6 max-w-md mx-auto">
@@ -150,10 +153,10 @@ function Home() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-primary-foreground text-sm font-medium shadow"
             >
               <Download className="w-4 h-4" />
-              {canInstall ? "Install BCradio app" : "Add to Home Screen"}
+              {canInstall ? t("installApp") : t("addHome")}
             </button>
             <div className="mt-2 text-[11px] font-mono text-muted-foreground">
-              Works offline once installed
+              {t("worksOffline")}
             </div>
           </div>
         )}
@@ -165,7 +168,7 @@ function Home() {
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-amber/40 bg-amber/5 text-amber text-xs font-mono uppercase tracking-widest disabled:opacity-50"
           >
             {notifOn ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
-            {notifOn ? "Daily alerts on" : "Turn on daily alerts"}
+            {notifOn ? t("alertsOn") : t("alertsOff")}
           </button>
           <button
             onClick={() => setRequestsOpen((v) => !v)}
@@ -173,18 +176,18 @@ function Home() {
               requestsOpen ? "border-amber/50 bg-amber/10 text-amber" : "border-border text-muted-foreground hover:text-amber hover:border-amber/50"
             }`}
           >
-            <ListMusic className="w-3.5 h-3.5" /> Request line
+            <ListMusic className="w-3.5 h-3.5" /> {t("requestLine")}
           </button>
           <a
             href="#weather"
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-border text-muted-foreground text-xs font-mono uppercase tracking-widest hover:text-amber hover:border-amber/50"
           >
-            <CloudSun className="w-3.5 h-3.5" /> Weather desk
+            <CloudSun className="w-3.5 h-3.5" /> {t("weatherDesk")}
           </a>
         </div>
         <div className="mt-2 text-[11px] font-mono text-muted-foreground">
-          Sign-on alert 7:30 AM ET · Sign-off warning 9:00 PM ET
-          {mounted && notificationPermission() === "denied" && " · notifications blocked in browser settings"}
+          {t("alertSchedule")}
+          {mounted && notificationPermission() === "denied" && ` · ${t("notifBlocked")}`}
         </div>
 
         <div className="mt-6 max-w-2xl mx-auto text-left">
@@ -193,10 +196,11 @@ function Home() {
       </header>
 
 
+
       <div className="panel p-6 md:p-10">
         <div className="flex items-end justify-between mb-6">
           <div>
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Stations</div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">{t("stations")}</div>
             <h2
               onClick={() => {
                 const next = dialTaps + 1;
@@ -212,12 +216,12 @@ function Home() {
               }}
               className={`font-display text-2xl md:text-3xl cursor-pointer select-none ${requestAdmin ? "text-amber" : ""}`}
             >
-              Turn the dial
+              {t("turnTheDial")}
             </h2>
           </div>
 
           <div className="hidden md:block text-xs font-mono text-muted-foreground">
-            {stations.length} FREQUENCIES
+            {nf(stations.length)} {t("frequencies")}
           </div>
         </div>
 
@@ -244,7 +248,7 @@ function Home() {
                   <div className="text-right">
                     <div className="station-knob w-12 h-12 rounded-full group-hover:rotate-45 transition-transform duration-500 ml-auto" />
                     <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
-                      <Users className="w-3 h-3" /> {listeners.toLocaleString()}
+                      <Users className="w-3 h-3" /> {nf(listeners)}
                     </div>
                   </div>
                 </div>
@@ -283,18 +287,20 @@ function Home() {
 
         {stations.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            No stations yet.
+            {t("noStations")}
           </div>
         )}
       </div>
+
+      <NetworkSection />
 
       <WeatherSection />
 
 
 
       <footer className="mt-12 text-center text-xs font-mono text-muted-foreground opacity-70 space-y-1">
-        <div>Made by James Degenhardt</div>
-        <div className="opacity-60">© BCradio · {new Date().getFullYear()}</div>
+        <div>{t("madeBy")}</div>
+        <div className="opacity-60">© BCradio · {nf(new Date().getFullYear(), { useGrouping: false })}</div>
       </footer>
 
       <StudioModal open={studioOpen} onClose={() => setStudioOpen(false)} />

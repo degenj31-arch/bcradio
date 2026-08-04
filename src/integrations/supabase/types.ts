@@ -101,6 +101,41 @@ export type Database = {
         }
         Relationships: []
       }
+      song_ratings: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          rating: number
+          song_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          rating: number
+          song_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          rating?: number
+          song_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "song_ratings_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       song_requests: {
         Row: {
           artist: string | null
