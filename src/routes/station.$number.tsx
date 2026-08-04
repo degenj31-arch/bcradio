@@ -11,6 +11,8 @@ import { hd2Playlist, stationListenerCount } from "@/lib/listeners";
 import { SignOffCountdown } from "@/components/SignOffCountdown";
 import { TuningDial } from "@/components/TuningDial";
 import { ArrowLeft, Volume2, VolumeX, Radio, Moon, Megaphone, Users, Clock } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
+import { SongRating } from "@/components/SongRating";
 
 
 type StationSearch = { hd?: "2" };
@@ -30,10 +32,12 @@ export const Route = createFileRoute("/station/$number")({
 });
 
 function StationPage() {
+  const { t, nf } = useI18n();
   const { number } = Route.useParams();
   const { hd } = Route.useSearch();
   const isHD2 = hd === "2";
   const navigate = useNavigate();
+
 
   const [station, setStation] = useState<Station | null>(null);
   const [rawSongs, setRawSongs] = useState<Song[]>([]);
@@ -448,7 +452,13 @@ function StationPage() {
   }, [needsGesture, offAir, commercials, playAd, syncAndPlay, fadeTo, livePosition]);
 
 
-  // Feature 14 — rich lock-screen / CarPlay / Android Auto metadata.
+  // Rich lock-screen / CarPlay / Android Auto metadata.
+  // The embedded YouTube player publishes its own media session (the raw video
+  // title). We re-assert BCradio's metadata on a short interval so car head
+  // units always show the station's song title, never the YouTube title.
+  const progressRef = useRef(0);
+  progressRef.current = progress;
+
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
     const freq = station ? Number(station.number).toFixed(1) : "";
@@ -460,13 +470,30 @@ function StationPage() {
         ]
       : [{ src: "/icon-512.png", sizes: "512x512", type: "image/png" }];
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: ad ? `${ad.title} (Commercial)` : current?.title ?? "BCradio",
-      artist: ad ? "BCradio Ad Break" : current?.artist || station?.name || "BCradio",
-      album: `BCradio ${freq}${isHD2 ? " HD-2" : ""} FM · Live`,
-      artwork,
-    });
-    navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+    const title = ad ? `${ad.title} (${t("commercialBreak")})` : current?.title ?? "BCradio";
+    const artist = ad ? "BCradio" : current?.artist || station?.name || "BCradio";
+    const album = `BCradio ${freq}${isHD2 ? " HD-2" : ""} FM · Live`;
+
+    const apply = () => {
+      const md = navigator.mediaSession.metadata;
+      if (!md || md.title !== title || md.artist !== artist || md.album !== album) {
+        navigator.mediaSession.metadata = new MediaMetadata({ title, artist, album, artwork });
+      }
+      navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+      try {
+        const dur = ad ? Number(ad.duration_seconds) : Number(current?.duration_seconds ?? 0);
+        if (dur > 0) {
+          navigator.mediaSession.setPositionState({
+            duration: dur,
+            position: Math.min(dur, progressRef.current * dur),
+            playbackRate: 1,
+          });
+        }
+      } catch { /* unsupported */ }
+    };
+
+    apply();
+    const id = setInterval(apply, 2000);
 
     // Live broadcast: no seeking, no skipping — advertise that to the car head unit.
     const noop = () => { /* live stream */ };
@@ -474,11 +501,9 @@ function StationPage() {
       try { navigator.mediaSession.setActionHandler(action, noop); } catch { /* unsupported */ }
     }
     try { navigator.mediaSession.setActionHandler("play", noop); } catch { /* unsupported */ }
-    try {
-      const dur = ad ? Number(ad.duration_seconds) : Number(current?.duration_seconds ?? 0);
-      if (dur > 0) navigator.mediaSession.setPositionState({ duration: dur, position: Math.min(dur, progress * dur), playbackRate: 1 });
-    } catch { /* unsupported */ }
-  }, [current, ad, station, isHD2, playing, progress]);
+
+    return () => clearInterval(id);
+  }, [current, ad, station, isHD2, playing, t]);
 
 
   const toggleMute = () => {
@@ -501,10 +526,10 @@ function StationPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="panel p-6 sm:p-8 max-w-md w-full text-center">
-          <h2 className="font-display text-2xl mb-2">Signal lost</h2>
+          <h2 className="font-display text-2xl mb-2">{t("signalLost")}</h2>
           <p className="text-muted-foreground text-sm mb-4 break-words">{error}</p>
           <Link to="/" className="inline-block px-4 py-2 rounded-md bg-primary text-primary-foreground">
-            ← Back to dial
+            {t("backToDial")}
           </Link>
         </div>
       </div>
@@ -524,13 +549,13 @@ function StationPage() {
   const listeners = station ? stationListenerCount(station) : 0;
 
   return (
-    <div className="min-h-screen px-3 sm:px-4 py-6 sm:py-8 max-w-3xl mx-auto">
+    <div className="min-h-screen px-3 sm:px-4 pt-16 pb-6 sm:pt-20 sm:pb-8 max-w-3xl mx-auto">
       <nav className="flex items-center justify-between mb-4 sm:mb-6">
         <button onClick={() => navigate({ to: "/" })} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm">
-          <ArrowLeft className="w-4 h-4" /> Dial
+          <ArrowLeft className="w-4 h-4" /> {t("dial")}
         </button>
         <div className="font-mono text-[10px] sm:text-xs text-muted-foreground">
-          {offAir ? "OFF AIR · NIGHT" : ad ? "AD BREAK" : "LIVE · SYNCED WORLDWIDE"}
+          {offAir ? t("offAirNight") : ad ? t("adBreak") : t("live")}
         </div>
       </nav>
 
@@ -544,12 +569,12 @@ function StationPage() {
           <Clock className="w-3.5 h-3.5" /> {etTimeStr}
         </span>
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-          <Users className="w-3.5 h-3.5" /> {listeners.toLocaleString()} tuned in
+          <Users className="w-3.5 h-3.5" /> {nf(listeners)} {t("tunedIn")}
         </span>
         {nextAd && !offAir && (
           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
             <Megaphone className="w-3.5 h-3.5" />
-            Next break: {fmtCountdown(nextAd.msUntil)} · {nextAd.commercial.title}
+            {t("nextBreak")}: {fmtCountdown(nextAd.msUntil)} · {nextAd.commercial.title}
           </span>
         )}
       </div>
@@ -586,17 +611,17 @@ function StationPage() {
           {needsGesture ? (
             <button onClick={tuneIn}
               className="px-5 py-3 rounded-full bg-amber text-primary-foreground font-medium inline-flex items-center gap-2 shadow-lg">
-              <Radio className="w-4 h-4" /> Tune in
+              <Radio className="w-4 h-4" /> {t("tuneIn")}
             </button>
           ) : offAir ? (
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2 text-amber">
                 <Moon className="w-5 h-5" />
-                <span className="font-display text-lg sm:text-xl">Off air · Night broadcast paused</span>
+                <span className="font-display text-lg sm:text-xl">{t("offAirTitle")}</span>
               </div>
-              <div className="text-xs text-muted-foreground font-mono">Silent hours: {formatOffAirWindow()}</div>
+              <div className="text-xs text-muted-foreground font-mono">{t("silentHours")}: {t("silentHoursValue")}</div>
               <div className="text-xs text-muted-foreground">
-                Resumes in ~{resumeMinutes} min. Songs pick back up automatically at 7:00 AM ET.
+                {t("resumesIn", { n: nf(resumeMinutes) })}
               </div>
             </div>
           ) : tuning ? (
@@ -609,18 +634,23 @@ function StationPage() {
           ) : ad ? (
             <>
               <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-amber">
-                <Megaphone className="w-3.5 h-3.5" /> Commercial break
+                <Megaphone className="w-3.5 h-3.5" /> {t("commercialBreak")}
               </div>
               <div className="text-lg sm:text-xl md:text-2xl font-medium mt-1 break-words">{ad.title}</div>
             </>
           ) : current ? (
             <>
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">Now playing</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">{t("nowPlaying")}</div>
               <div className="text-lg sm:text-xl md:text-2xl font-medium mt-1 break-words">{current.title}</div>
               {current.artist && <div className="text-muted-foreground text-sm break-words">{current.artist}</div>}
+              <SongRating
+                key={current.id}
+                songId={current.id}
+                durationSeconds={Number(current.duration_seconds)}
+              />
             </>
           ) : (
-            <div className="text-muted-foreground text-sm">No songs on this station yet.</div>
+            <div className="text-muted-foreground text-sm">{t("noSongs")}</div>
           )}
         </div>
 
@@ -645,7 +675,7 @@ function StationPage() {
               {muted ? <VolumeX className="w-7 h-7" /> : <Volume2 className="w-7 h-7" />}
             </button>
             <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              Synced worldwide · no pause · no skip
+              {t("syncedNote")}
             </div>
             {station && (
               <div className="mt-2 flex gap-2">
@@ -656,7 +686,7 @@ function StationPage() {
                     search={{ hd: "2" }}
                     className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
                   >
-                    Switch to HD-2
+                    {t("switchHD2")}
                   </Link>
                 ) : (
                   <Link
@@ -665,7 +695,7 @@ function StationPage() {
                     search={{}}
                     className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
                   >
-                    Switch to main
+                    {t("switchMain")}
                   </Link>
                 )}
               </div>
@@ -675,7 +705,7 @@ function StationPage() {
       </div>
 
       <footer className="mt-8 text-center text-xs font-mono text-muted-foreground opacity-70">
-        Made by James Degenhardt
+        {t("madeBy")}
       </footer>
 
       <audio
