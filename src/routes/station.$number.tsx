@@ -611,17 +611,17 @@ function StationPage() {
           {needsGesture ? (
             <button onClick={tuneIn}
               className="px-5 py-3 rounded-full bg-amber text-primary-foreground font-medium inline-flex items-center gap-2 shadow-lg">
-              <Radio className="w-4 h-4" /> Tune in
+              <Radio className="w-4 h-4" /> {t("tuneIn")}
             </button>
           ) : offAir ? (
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2 text-amber">
                 <Moon className="w-5 h-5" />
-                <span className="font-display text-lg sm:text-xl">Off air · Night broadcast paused</span>
+                <span className="font-display text-lg sm:text-xl">{t("offAirTitle")}</span>
               </div>
-              <div className="text-xs text-muted-foreground font-mono">Silent hours: {formatOffAirWindow()}</div>
+              <div className="text-xs text-muted-foreground font-mono">{t("silentHours")}: {t("silentHoursValue")}</div>
               <div className="text-xs text-muted-foreground">
-                Resumes in ~{resumeMinutes} min. Songs pick back up automatically at 7:00 AM ET.
+                {t("resumesIn", { n: nf(resumeMinutes) })}
               </div>
             </div>
           ) : tuning ? (
@@ -634,18 +634,23 @@ function StationPage() {
           ) : ad ? (
             <>
               <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-amber">
-                <Megaphone className="w-3.5 h-3.5" /> Commercial break
+                <Megaphone className="w-3.5 h-3.5" /> {t("commercialBreak")}
               </div>
               <div className="text-lg sm:text-xl md:text-2xl font-medium mt-1 break-words">{ad.title}</div>
             </>
           ) : current ? (
             <>
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">Now playing</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">{t("nowPlaying")}</div>
               <div className="text-lg sm:text-xl md:text-2xl font-medium mt-1 break-words">{current.title}</div>
               {current.artist && <div className="text-muted-foreground text-sm break-words">{current.artist}</div>}
+              <SongRating
+                key={current.id}
+                songId={current.id}
+                durationSeconds={Number(current.duration_seconds)}
+              />
             </>
           ) : (
-            <div className="text-muted-foreground text-sm">No songs on this station yet.</div>
+            <div className="text-muted-foreground text-sm">{t("noSongs")}</div>
           )}
         </div>
 
