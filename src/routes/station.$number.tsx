@@ -526,10 +526,10 @@ function StationPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="panel p-6 sm:p-8 max-w-md w-full text-center">
-          <h2 className="font-display text-2xl mb-2">Signal lost</h2>
+          <h2 className="font-display text-2xl mb-2">{t("signalLost")}</h2>
           <p className="text-muted-foreground text-sm mb-4 break-words">{error}</p>
           <Link to="/" className="inline-block px-4 py-2 rounded-md bg-primary text-primary-foreground">
-            ← Back to dial
+            {t("backToDial")}
           </Link>
         </div>
       </div>
