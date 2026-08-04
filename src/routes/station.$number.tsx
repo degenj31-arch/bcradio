@@ -675,7 +675,7 @@ function StationPage() {
               {muted ? <VolumeX className="w-7 h-7" /> : <Volume2 className="w-7 h-7" />}
             </button>
             <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              Synced worldwide · no pause · no skip
+              {t("syncedNote")}
             </div>
             {station && (
               <div className="mt-2 flex gap-2">
@@ -686,7 +686,7 @@ function StationPage() {
                     search={{ hd: "2" }}
                     className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
                   >
-                    Switch to HD-2
+                    {t("switchHD2")}
                   </Link>
                 ) : (
                   <Link
@@ -695,7 +695,7 @@ function StationPage() {
                     search={{}}
                     className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
                   >
-                    Switch to main
+                    {t("switchMain")}
                   </Link>
                 )}
               </div>
@@ -705,7 +705,7 @@ function StationPage() {
       </div>
 
       <footer className="mt-8 text-center text-xs font-mono text-muted-foreground opacity-70">
-        Made by James Degenhardt
+        {t("madeBy")}
       </footer>
 
       <audio
