@@ -673,6 +673,13 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
                     {fmtTime(Number(c.duration_seconds))} · {times || "no times"}
                   </div>
                 </div>
+                {c.youtube_id && (
+                  <button onClick={() => toggleVideo(c)}
+                    title="Show the YouTube video while this ad plays"
+                    className={`text-xs px-2 py-1 rounded shrink-0 inline-flex items-center gap-1 ${c.show_video ? "bg-amber/20 text-amber" : "bg-accent text-muted-foreground"}`}>
+                    <Monitor className="w-3.5 h-3.5" /> {c.show_video ? "Video on" : "Audio only"}
+                  </button>
+                )}
                 <button onClick={() => toggle(c)}
                   className={`text-xs px-2 py-1 rounded shrink-0 ${c.active ? "bg-amber/20 text-amber" : "bg-accent text-muted-foreground"}`}>
                   {c.active ? "Active" : "Paused"}
@@ -685,6 +692,19 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
           })}
         </div>
       </div>
+
+      <div className="rounded-md border border-border bg-card/40 p-4">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Notifications</div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Daily alerts go out at 7:30 AM and 9:00 PM ET to every device that enabled them in the installed app.
+          Send a live test to confirm delivery.
+        </p>
+        <button type="button" onClick={sendTest}
+          className="px-4 py-2 rounded-md bg-accent text-foreground text-sm font-medium inline-flex items-center gap-2">
+          <Bell className="w-4 h-4" /> Send test notification
+        </button>
+      </div>
+
     </>
   );
 }
