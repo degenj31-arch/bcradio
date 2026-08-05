@@ -22,6 +22,7 @@ export type Database = {
           duration_seconds: number
           id: string
           schedule_times: string[]
+          show_video: boolean
           title: string
           updated_at: string
           youtube_id: string | null
@@ -33,6 +34,7 @@ export type Database = {
           duration_seconds: number
           id?: string
           schedule_times?: string[]
+          show_video?: boolean
           title: string
           updated_at?: string
           youtube_id?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           duration_seconds?: number
           id?: string
           schedule_times?: string[]
+          show_video?: boolean
           title?: string
           updated_at?: string
           youtube_id?: string | null
@@ -238,6 +241,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      station_requests: {
+        Row: {
+          created_at: string
+          genre: string | null
+          id: string
+          name: string
+          note: string | null
+          number: number | null
+          requester: string | null
+          songs: string | null
+        }
+        Insert: {
+          created_at?: string
+          genre?: string | null
+          id?: string
+          name: string
+          note?: string | null
+          number?: number | null
+          requester?: string | null
+          songs?: string | null
+        }
+        Update: {
+          created_at?: string
+          genre?: string | null
+          id?: string
+          name?: string
+          note?: string | null
+          number?: number | null
+          requester?: string | null
+          songs?: string | null
+        }
+        Relationships: []
       }
       station_sessions: {
         Row: {

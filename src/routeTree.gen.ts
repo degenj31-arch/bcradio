@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StationNumberRouteImport } from './routes/station.$number'
+import { Route as ApiPublicVapidKeyRouteImport } from './routes/api/public/vapid-key'
 import { Route as ApiPublicHooksBroadcastNotifyRouteImport } from './routes/api/public/hooks/broadcast-notify'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const StationNumberRoute = StationNumberRouteImport.update({
   path: '/station/$number',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicVapidKeyRoute = ApiPublicVapidKeyRouteImport.update({
+  id: '/api/public/vapid-key',
+  path: '/api/public/vapid-key',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksBroadcastNotifyRoute =
   ApiPublicHooksBroadcastNotifyRouteImport.update({
     id: '/api/public/hooks/broadcast-notify',
@@ -33,34 +39,47 @@ const ApiPublicHooksBroadcastNotifyRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/station/$number': typeof StationNumberRoute
+  '/api/public/vapid-key': typeof ApiPublicVapidKeyRoute
   '/api/public/hooks/broadcast-notify': typeof ApiPublicHooksBroadcastNotifyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/station/$number': typeof StationNumberRoute
+  '/api/public/vapid-key': typeof ApiPublicVapidKeyRoute
   '/api/public/hooks/broadcast-notify': typeof ApiPublicHooksBroadcastNotifyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/station/$number': typeof StationNumberRoute
+  '/api/public/vapid-key': typeof ApiPublicVapidKeyRoute
   '/api/public/hooks/broadcast-notify': typeof ApiPublicHooksBroadcastNotifyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/station/$number' | '/api/public/hooks/broadcast-notify'
+  fullPaths:
+    | '/'
+    | '/station/$number'
+    | '/api/public/vapid-key'
+    | '/api/public/hooks/broadcast-notify'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/station/$number' | '/api/public/hooks/broadcast-notify'
+  to:
+    | '/'
+    | '/station/$number'
+    | '/api/public/vapid-key'
+    | '/api/public/hooks/broadcast-notify'
   id:
     | '__root__'
     | '/'
     | '/station/$number'
+    | '/api/public/vapid-key'
     | '/api/public/hooks/broadcast-notify'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   StationNumberRoute: typeof StationNumberRoute
+  ApiPublicVapidKeyRoute: typeof ApiPublicVapidKeyRoute
   ApiPublicHooksBroadcastNotifyRoute: typeof ApiPublicHooksBroadcastNotifyRoute
 }
 
@@ -80,6 +99,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationNumberRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/vapid-key': {
+      id: '/api/public/vapid-key'
+      path: '/api/public/vapid-key'
+      fullPath: '/api/public/vapid-key'
+      preLoaderRoute: typeof ApiPublicVapidKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/broadcast-notify': {
       id: '/api/public/hooks/broadcast-notify'
       path: '/api/public/hooks/broadcast-notify'
@@ -93,6 +119,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   StationNumberRoute: StationNumberRoute,
+  ApiPublicVapidKeyRoute: ApiPublicVapidKeyRoute,
   ApiPublicHooksBroadcastNotifyRoute: ApiPublicHooksBroadcastNotifyRoute,
 }
 export const routeTree = rootRouteImport

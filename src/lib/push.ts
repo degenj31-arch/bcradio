@@ -1,9 +1,24 @@
 // Client-side push notification helpers for BCradio daily broadcast alerts.
 import { supabase } from "@/integrations/supabase/client";
 
-// VAPID application server public key (safe to ship to the browser).
+// Fallback VAPID application server public key (safe to ship to the browser).
+// The live key is fetched from the server so it can never drift out of sync
+// with the key the notification sender signs with.
 export const VAPID_PUBLIC_KEY =
   "BCvEKEpXPX1E1e8YHsjpXq0JjmIX8Vwqaw5pWIAh2IvYYdSjzNmDdPJ-TpbPE5jsgoUiWeIRR69Mt8k2u_97xTU";
+
+async function serverVapidKey(): Promise<string> {
+  try {
+    const res = await fetch("/api/public/vapid-key", { cache: "no-store" });
+    if (res.ok) {
+      const json = (await res.json()) as { publicKey?: string };
+      if (json.publicKey && json.publicKey.length > 60) return json.publicKey;
+    }
+  } catch {
+    /* fall back below */
+  }
+  return VAPID_PUBLIC_KEY;
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -13,6 +28,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
 }
+
 
 export function pushSupported(): boolean {
   return (
@@ -61,18 +77,39 @@ export async function enableBroadcastNotifications(): Promise<
   reg = (await navigator.serviceWorker.getRegistration()) ?? reg;
 
 
+  const appKey = await serverVapidKey();
+  const appKeyBytes = urlBase64ToUint8Array(appKey);
+
   let sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    // A subscription made with a different application key can never be
+    // delivered to — drop it and make a fresh one.
+    const existing = sub.options?.applicationServerKey;
+    const same =
+      existing != null &&
+      new Uint8Array(existing).length === appKeyBytes.length &&
+      new Uint8Array(existing).every((b, i) => b === appKeyBytes[i]);
+    if (!same) {
+      await sub.unsubscribe().catch(() => {});
+      sub = null;
+    }
+  }
   if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
-    });
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: appKeyBytes as BufferSource,
+      });
+    } catch (e) {
+      return { ok: false, reason: e instanceof Error ? e.message : "Push subscription was rejected." };
+    }
   }
 
   const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
     return { ok: false, reason: "Could not read the push subscription." };
   }
+
 
   const { error } = await supabase.from("push_subscriptions").upsert(
     {
@@ -103,4 +140,16 @@ export async function disableBroadcastNotifications(): Promise<void> {
   const endpoint = sub.endpoint;
   await sub.unsubscribe().catch(() => {});
   await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+}
+
+// Fires a real push to every registered device right now (studio-only tool).
+export async function sendTestBroadcast(): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const res = await fetch("/api/public/hooks/broadcast-notify?test=1", { method: "POST" });
+    const json = (await res.json()) as { ok?: boolean; sent?: number; error?: string };
+    if (!res.ok || json.ok === false) return { ok: false, detail: json.error ?? `HTTP ${res.status}` };
+    return { ok: true, detail: `Sent to ${json.sent ?? 0} device(s)` };
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message : "Request failed" };
+  }
 }

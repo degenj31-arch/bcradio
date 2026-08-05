@@ -5,7 +5,8 @@ import { extractDuration, uploadAudio, fmtTime } from "@/lib/radio";
 import { parseYouTubeId, fetchYouTubeDuration, formatOffAirWindow, parseScheduleTime, formatScheduleTime } from "@/lib/youtube";
 import { fetchCommercials, type Commercial } from "@/lib/commercials";
 import type { Station, Song } from "@/lib/radio";
-import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube, Megaphone } from "lucide-react";
+import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube, Megaphone, Bell, Monitor } from "lucide-react";
+import { sendTestBroadcast } from "@/lib/push";
 import { toast } from "sonner";
 
 type Props = { open: boolean; onClose: () => void };
@@ -553,9 +554,11 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
         payload = { youtube_id: null, audio_url: path, duration_seconds: duration };
       }
 
+      const showVideo = mode === "youtube" && fd.get("show_video") === "on";
       const { error } = await supabase.from("commercials").insert({
-        title, schedule_times: times, active: true, ...payload,
+        title, schedule_times: times, active: true, show_video: showVideo, ...payload,
       });
+
       if (error) throw error;
       toast.success(`Commercial "${title}" scheduled`);
       form.reset();
@@ -572,12 +575,26 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
     onChanged();
   };
 
+  const toggleVideo = async (c: Commercial) => {
+    const { error } = await supabase.from("commercials").update({ show_video: !c.show_video }).eq("id", c.id);
+    if (error) return toast.error(error.message);
+    onChanged();
+  };
+
+  const sendTest = async () => {
+    toast.message("Sending test notification…");
+    const res = await sendTestBroadcast();
+    if (res.ok) toast.success(res.detail);
+    else toast.error(res.detail);
+  };
+
   const remove = async (c: Commercial) => {
     if (!confirm(`Delete commercial "${c.title}"?`)) return;
     const { error } = await supabase.from("commercials").delete().eq("id", c.id);
     if (error) return toast.error(error.message);
     onChanged();
   };
+
 
   return (
     <>
@@ -607,12 +624,20 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
           ))}
         </div>
         {mode === "youtube" ? (
-          <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
-            className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+          <>
+            <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
+              className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" name="show_video" className="accent-amber w-4 h-4" />
+              Show the video on air (listeners see the clip while the ad plays)
+            </label>
+          </>
         ) : (
           <input name="file" type="file" accept="audio/*,video/*" required
             className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-amber file:text-primary-foreground" />
         )}
+
+
 
         <div className="grid sm:grid-cols-2 gap-3">
           <input name="title" placeholder="Ad title (e.g. Local Diner Spot)" required
@@ -648,6 +673,13 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
                     {fmtTime(Number(c.duration_seconds))} · {times || "no times"}
                   </div>
                 </div>
+                {c.youtube_id && (
+                  <button onClick={() => toggleVideo(c)}
+                    title="Show the YouTube video while this ad plays"
+                    className={`text-xs px-2 py-1 rounded shrink-0 inline-flex items-center gap-1 ${c.show_video ? "bg-amber/20 text-amber" : "bg-accent text-muted-foreground"}`}>
+                    <Monitor className="w-3.5 h-3.5" /> {c.show_video ? "Video on" : "Audio only"}
+                  </button>
+                )}
                 <button onClick={() => toggle(c)}
                   className={`text-xs px-2 py-1 rounded shrink-0 ${c.active ? "bg-amber/20 text-amber" : "bg-accent text-muted-foreground"}`}>
                   {c.active ? "Active" : "Paused"}
@@ -660,6 +692,19 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
           })}
         </div>
       </div>
+
+      <div className="rounded-md border border-border bg-card/40 p-4">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Notifications</div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Daily alerts go out at 7:30 AM and 9:00 PM ET to every device that enabled them in the installed app.
+          Send a live test to confirm delivery.
+        </p>
+        <button type="button" onClick={sendTest}
+          className="px-4 py-2 rounded-md bg-accent text-foreground text-sm font-medium inline-flex items-center gap-2">
+          <Bell className="w-4 h-4" /> Send test notification
+        </button>
+      </div>
+
     </>
   );
 }
