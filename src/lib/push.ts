@@ -1,9 +1,24 @@
 // Client-side push notification helpers for BCradio daily broadcast alerts.
 import { supabase } from "@/integrations/supabase/client";
 
-// VAPID application server public key (safe to ship to the browser).
+// Fallback VAPID application server public key (safe to ship to the browser).
+// The live key is fetched from the server so it can never drift out of sync
+// with the key the notification sender signs with.
 export const VAPID_PUBLIC_KEY =
   "BCvEKEpXPX1E1e8YHsjpXq0JjmIX8Vwqaw5pWIAh2IvYYdSjzNmDdPJ-TpbPE5jsgoUiWeIRR69Mt8k2u_97xTU";
+
+async function serverVapidKey(): Promise<string> {
+  try {
+    const res = await fetch("/api/public/vapid-key", { cache: "no-store" });
+    if (res.ok) {
+      const json = (await res.json()) as { publicKey?: string };
+      if (json.publicKey && json.publicKey.length > 60) return json.publicKey;
+    }
+  } catch {
+    /* fall back below */
+  }
+  return VAPID_PUBLIC_KEY;
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -13,6 +28,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
 }
+
 
 export function pushSupported(): boolean {
   return (
