@@ -553,9 +553,11 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
         payload = { youtube_id: null, audio_url: path, duration_seconds: duration };
       }
 
+      const showVideo = mode === "youtube" && fd.get("show_video") === "on";
       const { error } = await supabase.from("commercials").insert({
-        title, schedule_times: times, active: true, ...payload,
+        title, schedule_times: times, active: true, show_video: showVideo, ...payload,
       });
+
       if (error) throw error;
       toast.success(`Commercial "${title}" scheduled`);
       form.reset();
@@ -607,12 +609,20 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
           ))}
         </div>
         {mode === "youtube" ? (
-          <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
-            className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+          <>
+            <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
+              className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" name="show_video" className="accent-amber w-4 h-4" />
+              Show the video on air (listeners see the clip while the ad plays)
+            </label>
+          </>
         ) : (
           <input name="file" type="file" accept="audio/*,video/*" required
             className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-amber file:text-primary-foreground" />
         )}
+
+
 
         <div className="grid sm:grid-cols-2 gap-3">
           <input name="title" placeholder="Ad title (e.g. Local Diner Spot)" required
