@@ -105,9 +105,12 @@ export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
         }
         const subs = (await subsRes.json()) as { endpoint: string; p256dh: string; auth: string }[];
 
-        const msg = pick(slot === "morning" ? MORNING : EVENING, slotKey);
+        const msg = isTest
+          ? { title: "BCradio test transmission", body: "Push notifications are working. You'll get the real ones at 7:30 AM and 9:00 PM ET." }
+          : pick(slot === "morning" ? MORNING : EVENING, slotKey);
         let sent = 0;
         const stale: string[] = [];
+        const errors: string[] = [];
 
         await Promise.all(
           subs.map(async (s) => {
@@ -123,7 +126,9 @@ export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
               const res = await fetch(s.endpoint, payload as unknown as RequestInit);
               if (res.status === 404 || res.status === 410) stale.push(s.endpoint);
               else if (res.ok) sent++;
+              else errors.push(`${res.status} ${(await res.text()).slice(0, 120)}`);
             } catch (e) {
+              errors.push(e instanceof Error ? e.message : String(e));
               console.error("[push]", e);
             }
           }),
@@ -132,10 +137,20 @@ export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
         for (const endpoint of stale) {
           await rest(`push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: "DELETE" });
         }
-        await rest(`notification_log?slot_key=eq.${encodeURIComponent(slotKey)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ sent_count: sent }),
-        });
+        if (!isTest) {
+          await rest(`notification_log?slot_key=eq.${encodeURIComponent(slotKey)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ sent_count: sent }),
+          });
+        }
+
+        if (isTest) {
+          return Response.json({
+            ok: true, test: true, subscriptions: subs.length, sent, removed: stale.length,
+            error: errors[0],
+          });
+        }
+
 
         return Response.json({ ok: true, slot, sent, removed: stale.length });
       },
