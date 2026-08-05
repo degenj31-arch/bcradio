@@ -574,12 +574,26 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
     onChanged();
   };
 
+  const toggleVideo = async (c: Commercial) => {
+    const { error } = await supabase.from("commercials").update({ show_video: !c.show_video }).eq("id", c.id);
+    if (error) return toast.error(error.message);
+    onChanged();
+  };
+
+  const sendTest = async () => {
+    toast.message("Sending test notification…");
+    const res = await sendTestBroadcast();
+    if (res.ok) toast.success(res.detail);
+    else toast.error(res.detail);
+  };
+
   const remove = async (c: Commercial) => {
     if (!confirm(`Delete commercial "${c.title}"?`)) return;
     const { error } = await supabase.from("commercials").delete().eq("id", c.id);
     if (error) return toast.error(error.message);
     onChanged();
   };
+
 
   return (
     <>
