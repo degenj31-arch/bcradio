@@ -550,6 +550,8 @@ function StationPage() {
 
   const resumeMinutes = Math.ceil(msUntilOnAir() / 60000);
   const displayDurationSec = ad ? Number(ad.duration_seconds) : (current ? Number(current.duration_seconds) : 0);
+  const showAdVideo = !!(ad && ad.show_video && ad.youtube_id && !offAir && !needsGesture && !tuning);
+
 
   // Ticker data — recomputed each `tick`.
   void tick;
