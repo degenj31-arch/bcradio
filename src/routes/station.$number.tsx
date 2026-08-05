@@ -666,6 +666,27 @@ function StationPage() {
           )}
         </div>
 
+        {/* The YouTube player lives here permanently. It's parked off-screen for
+            audio-only playback and expands into an on-air video screen when a
+            commercial is flagged to show its clip. */}
+        <div
+          className={
+            showAdVideo
+              ? "mt-6 mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full"
+              : "pointer-events-none fixed -left-[9999px] -top-[9999px] h-px w-px overflow-hidden"
+          }
+          aria-hidden={!showAdVideo}
+        >
+          <div ref={ytHolderRef} className="h-full w-full" />
+        </div>
+        {showAdVideo && (
+          <div className="mt-2 text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+            {t("commercialBreak")}
+          </div>
+        )}
+
+
+
         {(current || ad) && !needsGesture && !offAir && (
           <div className="mt-6">
             <div className="h-1 bg-muted rounded-full overflow-hidden">
@@ -727,11 +748,6 @@ function StationPage() {
         onEnded={() => { if (!offAir) onSongEnded().catch(() => {}); }}
         onError={() => setError("Audio failed to load")}
         playsInline
-      />
-      <div
-        ref={ytHolderRef}
-        aria-hidden
-        style={{ position: "fixed", left: "-9999px", top: "-9999px", width: 1, height: 1, overflow: "hidden" }}
       />
     </div>
   );
