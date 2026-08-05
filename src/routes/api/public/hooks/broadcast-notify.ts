@@ -52,7 +52,7 @@ function pick<T>(arr: T[], dateKey: string): T {
 export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
         const SUPABASE_URL = process.env.SUPABASE_URL!;
         const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
         const vapid = {
@@ -64,12 +64,14 @@ export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
           return Response.json({ ok: false, error: "VAPID keys missing" }, { status: 500 });
         }
 
+        const isTest = new URL(request.url).searchParams.get("test") === "1";
         const { date, minutes } = etParts(new Date());
         // Fire within a 15-minute window after each slot; the log table dedupes.
         let slot: "morning" | "evening" | null = null;
         if (minutes >= 7 * 60 + 30 && minutes < 7 * 60 + 45) slot = "morning";
         else if (minutes >= 21 * 60 && minutes < 21 * 60 + 15) slot = "evening";
-        if (!slot) return Response.json({ ok: true, skipped: "outside slot window" });
+        if (!slot && !isTest) return Response.json({ ok: true, skipped: "outside slot window" });
+        if (!slot) slot = minutes < 12 * 60 ? "morning" : "evening";
 
         const slotKey = `${date}:${slot}`;
         const rest = async (path: string, init?: RequestInit) =>
@@ -84,15 +86,18 @@ export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
           });
 
         // Claim the slot — unique constraint prevents duplicates.
-        const claim = await rest("notification_log", {
-          method: "POST",
-          body: JSON.stringify({ slot_key: slotKey }),
-        });
-        if (!claim.ok) {
-          const body = await claim.text();
-          if (claim.status === 409) return Response.json({ ok: true, skipped: "already sent" });
-          return Response.json({ ok: false, error: body }, { status: 500 });
+        if (!isTest) {
+          const claim = await rest("notification_log", {
+            method: "POST",
+            body: JSON.stringify({ slot_key: slotKey }),
+          });
+          if (!claim.ok) {
+            const body = await claim.text();
+            if (claim.status === 409) return Response.json({ ok: true, skipped: "already sent" });
+            return Response.json({ ok: false, error: body }, { status: 500 });
+          }
         }
+
 
         const subsRes = await rest("push_subscriptions?select=endpoint,p256dh,auth");
         if (!subsRes.ok) {
