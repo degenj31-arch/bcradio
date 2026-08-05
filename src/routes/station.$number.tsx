@@ -355,30 +355,42 @@ function StationPage() {
     setTuning(true);
     setError(null);
 
-    // Let the dial ceremony play out before the audio lands.
-    await new Promise((r) => setTimeout(r, 2200));
-    if (stoppedRef.current) return;
-
     if (isOffAir()) {
       setOffAir(true);
       setTuning(false);
       return;
     }
 
-    try {
+    // Kick playback off *inside* the click gesture — waiting for the dial
+    // ceremony first makes browsers treat autoplay as user-less and silently
+    // block it. It starts silent and fades up when the dial locks.
+    applyVolume(0);
+    const started = (async () => {
       const act = activeCommercial(commercials);
       if (act) {
         activeAdKeyRef.current = act.key;
-        await playAd(act.commercial, act.offset);
+        adPlayingRef.current = true;
+        setAd(act.commercial);
+        setCurrent(null);
+        currentSongIdRef.current = null;
+        if (act.commercial.youtube_id) await playYouTube(act.commercial.youtube_id, act.offset);
+        else if (act.commercial.audio_url) await playAudioPath(act.commercial.audio_url, act.offset);
       } else {
-        await syncAndPlay({ force: true, fadeIn: true });
+        await syncAndPlay({ force: true });
       }
-    } catch (e) {
+    })().catch((e) => {
       console.error("playback error", e);
       setError(e instanceof Error ? e.message : "Playback failed");
-    }
+    });
+
+    // Let the dial ceremony play out while the audio spins up behind it.
+    await new Promise((r) => setTimeout(r, 2200));
+    await started;
+    if (stoppedRef.current) return;
     setTuning(false);
-  }, [station, syncAndPlay, commercials, playAd]);
+    await fadeTo(1, 900);
+  }, [station, syncAndPlay, commercials, playYouTube, playAudioPath, applyVolume, fadeTo]);
+
 
 
   // Progress + end detection.
