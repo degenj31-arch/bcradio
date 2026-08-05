@@ -77,18 +77,39 @@ export async function enableBroadcastNotifications(): Promise<
   reg = (await navigator.serviceWorker.getRegistration()) ?? reg;
 
 
+  const appKey = await serverVapidKey();
+  const appKeyBytes = urlBase64ToUint8Array(appKey);
+
   let sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    // A subscription made with a different application key can never be
+    // delivered to — drop it and make a fresh one.
+    const existing = sub.options?.applicationServerKey;
+    const same =
+      existing != null &&
+      new Uint8Array(existing).length === appKeyBytes.length &&
+      new Uint8Array(existing).every((b, i) => b === appKeyBytes[i]);
+    if (!same) {
+      await sub.unsubscribe().catch(() => {});
+      sub = null;
+    }
+  }
   if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
-    });
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: appKeyBytes as BufferSource,
+      });
+    } catch (e) {
+      return { ok: false, reason: e instanceof Error ? e.message : "Push subscription was rejected." };
+    }
   }
 
   const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
     return { ok: false, reason: "Could not read the push subscription." };
   }
+
 
   const { error } = await supabase.from("push_subscriptions").upsert(
     {
