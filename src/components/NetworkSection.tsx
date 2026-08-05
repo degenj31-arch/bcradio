@@ -18,7 +18,7 @@ const SITES: Site[] = [
   { name: "BCgolf", url: "https://bcgolf.lovable.app", descKey: "siteGolf", icon: Flag, color: "#22c55e", tag: "Mini golf" },
   { name: "JamesAI", url: "https://james-ai.lovable.app", descKey: "siteAI", icon: Bot, color: "#a78bfa", tag: "AI assistant" },
   { name: "TicTacToe Arcade", url: "https://tictactoe-5u4.pages.dev", descKey: "siteArcade", icon: Gamepad2, color: "#f472b6", tag: "Game vault" },
-  { name: "BCmonopoly", url: "https://bcmonopoly.lovable.app", descKey: "siteMonopoly", icon: Candy, color: "#fb923c", tag: "Candy Monopoly" },
+  { name: "BCmonopoly", url: "https://bc-monopoly.lovable.app", descKey: "siteMonopoly", icon: Candy, color: "#fb923c", tag: "Candy Monopoly" },
   { name: "BCuno", url: "https://bcuno.lovable.app", descKey: "siteUno", icon: Layers, color: "#eab308", tag: "Online UNO" },
 ];
 

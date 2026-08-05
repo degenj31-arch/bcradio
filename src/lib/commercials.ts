@@ -9,6 +9,7 @@ export type Commercial = {
   duration_seconds: number;
   schedule_times: string[];
   active: boolean;
+  show_video?: boolean | null;
   created_at: string;
   updated_at: string;
 };
