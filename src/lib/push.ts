@@ -141,3 +141,15 @@ export async function disableBroadcastNotifications(): Promise<void> {
   await sub.unsubscribe().catch(() => {});
   await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
 }
+
+// Fires a real push to every registered device right now (studio-only tool).
+export async function sendTestBroadcast(): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const res = await fetch("/api/public/hooks/broadcast-notify?test=1", { method: "POST" });
+    const json = (await res.json()) as { ok?: boolean; sent?: number; error?: string };
+    if (!res.ok || json.ok === false) return { ok: false, detail: json.error ?? `HTTP ${res.status}` };
+    return { ok: true, detail: `Sent to ${json.sent ?? 0} device(s)` };
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message : "Request failed" };
+  }
+}
