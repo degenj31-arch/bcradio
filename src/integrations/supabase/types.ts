@@ -171,6 +171,7 @@ export type Database = {
           duration_seconds: number
           id: string
           position: number
+          show_video: boolean
           station_id: string
           title: string
           updated_at: string
@@ -183,6 +184,7 @@ export type Database = {
           duration_seconds: number
           id?: string
           position?: number
+          show_video?: boolean
           station_id: string
           title: string
           updated_at?: string
@@ -195,6 +197,7 @@ export type Database = {
           duration_seconds?: number
           id?: string
           position?: number
+          show_video?: boolean
           station_id?: string
           title?: string
           updated_at?: string

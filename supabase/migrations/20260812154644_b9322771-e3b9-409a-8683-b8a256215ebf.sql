@@ -1,0 +1,1 @@
+ALTER TABLE public.songs ADD COLUMN IF NOT EXISTS show_video boolean NOT NULL DEFAULT false;
