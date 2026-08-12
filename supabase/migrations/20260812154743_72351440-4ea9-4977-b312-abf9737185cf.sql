@@ -1,0 +1,1 @@
+CREATE POLICY "Backend service manages notification log" ON public.notification_log FOR ALL TO service_role USING (true) WITH CHECK (true);
