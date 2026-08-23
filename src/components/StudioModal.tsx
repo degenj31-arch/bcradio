@@ -116,6 +116,7 @@ export function StudioModal({ open, onClose }: Props) {
     const url = String(fd.get("url") || "").trim();
     const title = String(fd.get("title") || "").trim();
     const artist = String(fd.get("artist") || "").trim() || null;
+    const showVideo = fd.get("show_video") === "on";
     const videoId = parseYouTubeId(url);
     if (!videoId) return toast.error("Paste a valid YouTube URL (e.g. https://youtu.be/…)");
     if (!title) return toast.error("Title required");
@@ -132,7 +133,7 @@ export function StudioModal({ open, onClose }: Props) {
       const nextPos = (selectedSongs[selectedSongs.length - 1]?.position ?? -1) + 1;
       const { error } = await supabase.from("songs").insert({
         station_id: selectedId, title, artist, audio_url: null, youtube_id: videoId,
-        duration_seconds: duration, position: nextPos,
+        duration_seconds: duration, position: nextPos, show_video: showVideo,
       });
       if (error) throw error;
       toast.success(`✓ Added "${title}" (${fmtTime(duration)})`);
@@ -421,6 +422,10 @@ function StationEditor({
               <input name="artist" placeholder="Artist (optional)"
                 className="bg-input border border-border rounded-md px-3 py-2" />
             </div>
+             <label className="flex items-center gap-2 text-xs text-muted-foreground">
+               <input type="checkbox" name="show_video" className="accent-amber w-4 h-4" />
+               Show the YouTube video while this song is on air
+             </label>
             <button disabled={uploading} type="submit"
               className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
               {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Youtube className="w-4 h-4" />}
@@ -495,7 +500,12 @@ function SongRow({ song, index, onMove, onDelete, onUpdate }: {
           <input ref={titleRef} defaultValue={song.title} className="flex-1 min-w-0 bg-input border border-border rounded px-2 py-1 text-sm" />
           <input ref={artistRef} defaultValue={song.artist ?? ""} placeholder="artist" className="flex-1 min-w-0 bg-input border border-border rounded px-2 py-1 text-sm" />
           <button
-            onClick={() => { onUpdate({ title: titleRef.current!.value, artist: artistRef.current!.value || null }); setEdit(false); }}
+            onClick={() => {
+              const title = titleRef.current?.value.trim();
+              if (!title) return toast.error("Title required");
+              onUpdate({ title, artist: artistRef.current?.value.trim() || null });
+              setEdit(false);
+            }}
             className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground"
           >Save</button>
         </>
@@ -506,6 +516,15 @@ function SongRow({ song, index, onMove, onDelete, onUpdate }: {
             {song.artist && <div className="text-xs text-muted-foreground truncate">{song.artist}</div>}
           </div>
           <span className="font-mono text-xs text-muted-foreground shrink-0">{fmtTime(Number(song.duration_seconds))}</span>
+          {song.youtube_id && (
+            <button
+              onClick={() => onUpdate({ show_video: !song.show_video })}
+              title="Show the YouTube video while this song plays"
+              className={`text-xs px-2 py-1 rounded shrink-0 inline-flex items-center gap-1 ${song.show_video ? "bg-amber/20 text-amber" : "bg-accent text-muted-foreground"}`}
+            >
+              <Monitor className="w-3.5 h-3.5" /> {song.show_video ? "Video on" : "Audio only"}
+            </button>
+          )}
           <button onClick={() => onMove(-1)} className="p-1 hover:bg-accent rounded shrink-0" aria-label="Move up"><ArrowUp className="w-4 h-4" /></button>
           <button onClick={() => onMove(1)} className="p-1 hover:bg-accent rounded shrink-0" aria-label="Move down"><ArrowDown className="w-4 h-4" /></button>
           <button onClick={() => setEdit(true)} className="p-1 hover:bg-accent rounded shrink-0" aria-label="Edit"><Pencil className="w-4 h-4" /></button>
