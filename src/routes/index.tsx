@@ -28,6 +28,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Tune into BCradio stations. Same song, same moment, anywhere on earth." },
       { property: "og:title", content: "BCradio" },
       { property: "og:description", content: "Synchronized worldwide radio stations by James Degenhardt." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Home,

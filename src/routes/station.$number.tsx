@@ -26,6 +26,10 @@ export const Route = createFileRoute("/station/$number")({
     meta: [
       { title: `BCradio ${params.number} FM` },
       { name: "description", content: `Live broadcast on BCradio ${params.number} FM.` },
+      { property: "og:title", content: `BCradio ${params.number} FM` },
+      { property: "og:description", content: `Live synchronized broadcast on BCradio ${params.number} FM.` },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: StationPage,
@@ -52,6 +56,7 @@ function StationPage() {
   const [needsGesture, setNeedsGesture] = useState(true);
   const [offAir, setOffAir] = useState(isOffAir());
   const [tick, setTick] = useState(0); // 1Hz repaint for clock/listeners
+  const [etTimeStr, setEtTimeStr] = useState("--:--:-- ET");
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
@@ -99,7 +104,16 @@ function StationPage() {
 
   // 1Hz clock/listener repaint + off-air check.
   useEffect(() => {
-    const id = setInterval(() => { setTick((t) => t + 1); setOffAir(isOffAir()); }, 1000);
+    const updateClock = () => {
+      const et = etParts();
+      const period = et.hour >= 12 ? "PM" : "AM";
+      const h12 = ((et.hour + 11) % 12) + 1;
+      setEtTimeStr(`${h12}:${String(et.minute).padStart(2, "0")}:${String(et.second).padStart(2, "0")} ${period} ET`);
+      setTick((t) => t + 1);
+      setOffAir(isOffAir());
+    };
+    updateClock();
+    const id = setInterval(updateClock, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -351,6 +365,8 @@ function StationPage() {
 
   const tuneIn = useCallback(async () => {
     if (!station) return;
+    if (transitionRef.current) return;
+    transitionRef.current = true;
     setNeedsGesture(false);
     setTuning(true);
     setError(null);
@@ -358,6 +374,7 @@ function StationPage() {
     if (isOffAir()) {
       setOffAir(true);
       setTuning(false);
+      transitionRef.current = false;
       return;
     }
 
@@ -389,6 +406,7 @@ function StationPage() {
     if (stoppedRef.current) return;
     setTuning(false);
     await fadeTo(1, 900);
+    transitionRef.current = false;
   }, [station, syncAndPlay, commercials, playYouTube, playAudioPath, applyVolume, fadeTo]);
 
 
@@ -550,15 +568,14 @@ function StationPage() {
 
   const resumeMinutes = Math.ceil(msUntilOnAir() / 60000);
   const displayDurationSec = ad ? Number(ad.duration_seconds) : (current ? Number(current.duration_seconds) : 0);
-  const showAdVideo = !!(ad && ad.show_video && ad.youtube_id && !offAir && !needsGesture && !tuning);
+  const showOnAirVideo = !!(
+    !offAir && !needsGesture && !tuning &&
+    ((ad?.show_video && ad.youtube_id) || (!ad && current?.show_video && current.youtube_id))
+  );
 
 
   // Ticker data — recomputed each `tick`.
   void tick;
-  const et = etParts();
-  const period = et.hour >= 12 ? "PM" : "AM";
-  const h12 = ((et.hour + 11) % 12) + 1;
-  const etTimeStr = `${h12}:${String(et.minute).padStart(2, "0")}:${String(et.second).padStart(2, "0")} ${period} ET`;
   const nextAd = nextCommercialInfo(commercials);
   const listeners = station ? stationListenerCount(station) : 0;
 
@@ -579,7 +596,7 @@ function StationPage() {
 
       {/* On-air ticker */}
       <div className="panel px-3 py-2 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs font-mono">
-        <span className="inline-flex items-center gap-1.5 text-amber">
+        <span suppressHydrationWarning className="inline-flex items-center gap-1.5 text-amber">
           <Clock className="w-3.5 h-3.5" /> {etTimeStr}
         </span>
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -673,17 +690,17 @@ function StationPage() {
             commercial is flagged to show its clip. */}
         <div
           className={
-            showAdVideo
+             showOnAirVideo
               ? "mt-6 mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full"
               : "pointer-events-none fixed -left-[9999px] -top-[9999px] h-px w-px overflow-hidden"
           }
-          aria-hidden={!showAdVideo}
+          aria-hidden={!showOnAirVideo}
         >
           <div ref={ytHolderRef} className="h-full w-full" />
         </div>
-        {showAdVideo && (
+        {showOnAirVideo && (
           <div className="mt-2 text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-            {t("commercialBreak")}
+            {ad ? t("commercialBreak") : t("nowPlaying")}
           </div>
         )}
 

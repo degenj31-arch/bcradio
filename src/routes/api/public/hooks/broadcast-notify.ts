@@ -53,12 +53,15 @@ export const Route = createFileRoute("/api/public/hooks/broadcast-notify")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const SUPABASE_URL = process.env.SUPABASE_URL!;
-        const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        const SUPABASE_URL = process.env["SUPABASE_URL"];
+        const SERVICE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+        if (!SUPABASE_URL || !SERVICE_KEY) {
+          return Response.json({ ok: false, error: "Notification backend unavailable" }, { status: 500 });
+        }
         const vapid = {
           subject: process.env.VAPID_SUBJECT || "mailto:notifications@bcradio.app",
-          publicKey: process.env.VAPID_PUBLIC_KEY!,
-          privateKey: process.env.VAPID_PRIVATE_KEY!,
+          publicKey: process.env["VAPID_PUBLIC_KEY"] ?? "",
+          privateKey: process.env["VAPID_PRIVATE_KEY"] ?? "",
         };
         if (!vapid.publicKey || !vapid.privateKey) {
           return Response.json({ ok: false, error: "VAPID keys missing" }, { status: 500 });
