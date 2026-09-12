@@ -164,6 +164,16 @@ function StationPage() {
     return player;
   }, []);
 
+  // Build the embedded player before the listener presses Tune in. Mobile
+  // browsers only allow audible playback during the user's tap; creating the
+  // iframe after that tap can consume the activation before playVideo runs.
+  useEffect(() => {
+    const hasYouTubeAudio = songs.some((song) => Boolean(song.youtube_id)) ||
+      commercials.some((commercial) => Boolean(commercial.youtube_id));
+    if (!hasYouTubeAudio || ytPlayerRef.current) return;
+    ensureYT().catch((e) => console.error("[youtube-preload]", e));
+  }, [songs, commercials, ensureYT]);
+
   // Apply the current fade level to whichever source is live.
   const applyVolume = useCallback((level = fadeLevelRef.current) => {
     fadeLevelRef.current = level;
@@ -211,16 +221,21 @@ function StationPage() {
     try { muted ? yt.mute() : yt.unMute(); } catch { /* noop */ }
     applyVolume();
     yt.playVideo();
-    setPlaying(true);
     // Autoplay can silently stall on first tune-in — nudge until it really starts.
     for (let i = 0; i < 10; i++) {
       await new Promise((r) => setTimeout(r, 400));
       if (stoppedRef.current) return;
       const st = ytState(yt);
-      if (st === 1 || st === 3) break;
+      if (st === 1 || st === 3) {
+        setPlaying(true);
+        break;
+      }
       try { if (!muted) yt.unMute(); yt.playVideo(); } catch { /* noop */ }
     }
     applyVolume();
+    if (ytState(yt) !== 1 && ytState(yt) !== 3) {
+      throw new Error("The station audio was blocked. Tap Tune in again to start it.");
+    }
   }, [ensureYT, muted, applyVolume]);
 
   const playAudioPath = useCallback(async (path: string, offset: number) => {
@@ -378,10 +393,9 @@ function StationPage() {
       return;
     }
 
-    // Kick playback off *inside* the click gesture — waiting for the dial
-    // ceremony first makes browsers treat autoplay as user-less and silently
-    // block it. It starts silent and fades up when the dial locks.
-    applyVolume(0);
+    // Start audibly inside the click gesture. Starting at zero and raising the
+    // volume after the dial ceremony is treated as blocked autoplay on phones.
+    applyVolume(1);
     const started = (async () => {
       const act = activeCommercial(commercials);
       if (act) {
@@ -400,12 +414,11 @@ function StationPage() {
       setError(e instanceof Error ? e.message : "Playback failed");
     });
 
-    // Let the dial ceremony play out while the audio spins up behind it.
+    // Let the dial ceremony play out while the live audio is already running.
     await new Promise((r) => setTimeout(r, 2200));
     await started;
     if (stoppedRef.current) return;
     setTuning(false);
-    await fadeTo(1, 900);
     transitionRef.current = false;
   }, [station, syncAndPlay, commercials, playYouTube, playAudioPath, applyVolume, fadeTo]);
 
