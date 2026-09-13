@@ -154,8 +154,8 @@ function StationPage() {
     holder.appendChild(inner);
     const player = await new Promise<YT.Player>((resolve) => {
       const p = new YT.Player(inner, {
-        height: "180",
-        width: "320",
+        height: "100%",
+        width: "100%",
         playerVars: { autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, modestbranding: 1, rel: 0 },
         events: { onReady: () => resolve(p) },
       });
