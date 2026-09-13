@@ -307,6 +307,32 @@ function StationEditor({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"youtube" | "file">("youtube");
+  const [ytUrl, setYtUrl] = useState("");
+  const [ytTitle, setYtTitle] = useState("");
+  const [fileTitle, setFileTitle] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onDropSong = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setTab("file");
+      setFileTitle((t) => t || file.name.replace(/\.[^.]+$/, ""));
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      if (fileInputRef.current) fileInputRef.current.files = dt.files;
+      toast.success(`Dropped "${file.name}" — add a title and upload`);
+      return;
+    }
+    const found = extractDroppedYouTube(e);
+    if (!found) return toast.error("Drop a YouTube link or an audio/video file");
+    setTab("youtube");
+    setYtUrl(found.url);
+    if (found.title) setYtTitle(found.title);
+    toast.success("YouTube link dropped — check the title, then add it");
+  };
 
   const mark = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
 
