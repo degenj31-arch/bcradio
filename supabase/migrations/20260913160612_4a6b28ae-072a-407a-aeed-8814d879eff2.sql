@@ -1,0 +1,1 @@
+insert into public.commercials (title, youtube_id, duration_seconds, schedule_times, active, show_video) values ('ZZ Video Test', 'bCqnOn23LWE', 180, ARRAY['12:08'], true, true);
