@@ -549,6 +549,40 @@ function StationPage() {
     return () => clearInterval(id);
   }, [current, ad, station, isHD2, playing, t]);
 
+  // Whether the embedded clip should be visible on air.
+  const showOnAirVideo = !!(
+    !offAir && !needsGesture && !tuning &&
+    ((ad?.show_video && ad.youtube_id) || (!ad && current?.show_video && current.youtube_id))
+  );
+
+  // The player is built while parked off-screen, so YouTube lays it out at a
+  // tiny size and keeps painting nothing when the screen expands. Re-measure
+  // and resize the player whenever the on-air screen opens or the window moves.
+  useEffect(() => {
+    const resize = () => {
+      const p = ytPlayerRef.current;
+      if (!p) return;
+      const box = ytWrapRef.current?.getBoundingClientRect();
+      const w = showOnAirVideo && box && box.width > 10 ? Math.round(box.width) : 320;
+      const h = showOnAirVideo && box && box.height > 10 ? Math.round(box.height) : 180;
+      try { p.setSize(w, h); } catch { /* noop */ }
+      try {
+        const frame = p.getIframe?.();
+        if (frame) {
+          frame.style.width = "100%";
+          frame.style.height = "100%";
+        }
+      } catch { /* noop */ }
+    };
+    // A few passes: the layout settles a frame or two after the class swap.
+    const timers = [0, 60, 250, 800].map((ms) => setTimeout(resize, ms));
+    window.addEventListener("resize", resize);
+    return () => {
+      timers.forEach(clearTimeout);
+      window.removeEventListener("resize", resize);
+    };
+  }, [showOnAirVideo, ad, current]);
+
 
   const toggleMute = () => {
     const next = !muted;
