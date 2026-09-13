@@ -439,8 +439,16 @@ function StationEditor({
 
       <hr className="border-border" />
 
-      <div>
-        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Add Song</div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDropSong}
+        className={`rounded-lg transition-colors ${dragOver ? "ring-2 ring-amber bg-amber/5 p-3 -m-3" : ""}`}
+      >
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Add Song</div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Tip: drag a YouTube video (or an audio/video file) straight in here and it fills the form for you.
+        </p>
         <div className="flex gap-2 mb-3">
           <button type="button" onClick={() => setTab("youtube")}
             className={`px-3 py-1.5 rounded-md text-sm flex items-center gap-1.5 ${
@@ -457,11 +465,16 @@ function StationEditor({
         </div>
 
         {tab === "youtube" ? (
-          <form onSubmit={onYouTubeAdd} className="space-y-3">
-            <input name="url" placeholder="https://youtu.be/… or https://www.youtube.com/watch?v=…" required
+          <form
+            onSubmit={async (e) => { await onYouTubeAdd(e); setYtUrl(""); setYtTitle(""); }}
+            className="space-y-3"
+          >
+            <input name="url" value={ytUrl} onChange={(e) => setYtUrl(e.target.value)}
+              placeholder="https://youtu.be/… or https://www.youtube.com/watch?v=… (or drag the video here)" required
               className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
             <div className="grid sm:grid-cols-2 gap-3">
-              <input name="title" placeholder="Song title" required
+              <input name="title" value={ytTitle} onChange={(e) => setYtTitle(e.target.value)}
+                placeholder="Song title" required
                 className="bg-input border border-border rounded-md px-3 py-2" />
               <input name="artist" placeholder="Artist (optional)"
                 className="bg-input border border-border rounded-md px-3 py-2" />
@@ -477,14 +490,18 @@ function StationEditor({
             </button>
           </form>
         ) : (
-          <form onSubmit={onFileUpload} className="space-y-3">
+          <form
+            onSubmit={async (e) => { await onFileUpload(e); setFileTitle(""); }}
+            className="space-y-3"
+          >
             <div className="grid sm:grid-cols-2 gap-3">
-              <input name="title" placeholder="Song title" required
+              <input name="title" value={fileTitle} onChange={(e) => setFileTitle(e.target.value)}
+                placeholder="Song title" required
                 className="bg-input border border-border rounded-md px-3 py-2" />
               <input name="artist" placeholder="Artist (optional)"
                 className="bg-input border border-border rounded-md px-3 py-2" />
             </div>
-            <input name="file" type="file" accept="audio/*,video/*" required
+            <input ref={fileInputRef} name="file" type="file" accept="audio/*,video/*" required
               className="block w-full text-sm file:mr-3 file:px-3 file:py-2 file:rounded-md file:border-0 file:bg-accent file:text-foreground" />
             <button disabled={uploading} type="submit"
               className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
@@ -494,6 +511,7 @@ function StationEditor({
           </form>
         )}
       </div>
+
 
       <div>
         <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
