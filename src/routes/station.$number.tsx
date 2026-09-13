@@ -60,6 +60,7 @@ function StationPage() {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
+  const ytWrapRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
   const activeAdKeyRef = useRef<string | null>(null);
 
