@@ -60,6 +60,7 @@ function StationPage() {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
+  const ytWrapRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
   const activeAdKeyRef = useRef<string | null>(null);
 
@@ -154,8 +155,8 @@ function StationPage() {
     holder.appendChild(inner);
     const player = await new Promise<YT.Player>((resolve) => {
       const p = new YT.Player(inner, {
-        height: "180",
-        width: "320",
+        height: "100%",
+        width: "100%",
         playerVars: { autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, modestbranding: 1, rel: 0 },
         events: { onReady: () => resolve(p) },
       });
@@ -548,6 +549,40 @@ function StationPage() {
     return () => clearInterval(id);
   }, [current, ad, station, isHD2, playing, t]);
 
+  // Whether the embedded clip should be visible on air.
+  const showOnAirVideo = !!(
+    !offAir && !needsGesture && !tuning &&
+    ((ad?.show_video && ad.youtube_id) || (!ad && current?.show_video && current.youtube_id))
+  );
+
+  // The player is built while parked off-screen, so YouTube lays it out at a
+  // tiny size and keeps painting nothing when the screen expands. Re-measure
+  // and resize the player whenever the on-air screen opens or the window moves.
+  useEffect(() => {
+    const resize = () => {
+      const p = ytPlayerRef.current;
+      if (!p) return;
+      const box = ytWrapRef.current?.getBoundingClientRect();
+      const w = showOnAirVideo && box && box.width > 10 ? Math.round(box.width) : 320;
+      const h = showOnAirVideo && box && box.height > 10 ? Math.round(box.height) : 180;
+      try { p.setSize(w, h); } catch { /* noop */ }
+      try {
+        const frame = p.getIframe?.();
+        if (frame) {
+          frame.style.width = "100%";
+          frame.style.height = "100%";
+        }
+      } catch { /* noop */ }
+    };
+    // A few passes: the layout settles a frame or two after the class swap.
+    const timers = [0, 60, 250, 800].map((ms) => setTimeout(resize, ms));
+    window.addEventListener("resize", resize);
+    return () => {
+      timers.forEach(clearTimeout);
+      window.removeEventListener("resize", resize);
+    };
+  }, [showOnAirVideo, ad, current]);
+
 
   const toggleMute = () => {
     const next = !muted;
@@ -581,10 +616,6 @@ function StationPage() {
 
   const resumeMinutes = Math.ceil(msUntilOnAir() / 60000);
   const displayDurationSec = ad ? Number(ad.duration_seconds) : (current ? Number(current.duration_seconds) : 0);
-  const showOnAirVideo = !!(
-    !offAir && !needsGesture && !tuning &&
-    ((ad?.show_video && ad.youtube_id) || (!ad && current?.show_video && current.youtube_id))
-  );
 
 
   // Ticker data — recomputed each `tick`.
@@ -702,6 +733,7 @@ function StationPage() {
             audio-only playback and expands into an on-air video screen when a
             commercial is flagged to show its clip. */}
         <div
+          ref={ytWrapRef}
           className={
              showOnAirVideo
               ? "mt-6 mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full"
