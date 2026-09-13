@@ -11,6 +11,24 @@ import { toast } from "sonner";
 
 type Props = { open: boolean; onClose: () => void };
 
+// Pull a YouTube link (and a possible title) out of anything dragged in from
+// a browser tab, the YouTube app, or a bookmark.
+function extractDroppedYouTube(e: React.DragEvent): { url: string; title: string } | null {
+  const dt = e.dataTransfer;
+  const raw = [
+    dt.getData("text/uri-list"),
+    dt.getData("text/x-moz-url"),
+    dt.getData("text/plain"),
+  ].filter(Boolean);
+  const html = dt.getData("text/html");
+  if (html) raw.push(...(html.match(/https?:\/\/[^"'\s<>]+/g) ?? []));
+  const lines = raw.flatMap((r) => r.split(/[\r\n]+/)).map((s) => s.trim()).filter(Boolean);
+  const link = lines.find((l) => /^https?:\/\//i.test(l) && parseYouTubeId(l));
+  if (!link) return null;
+  const title = lines.find((l) => !/^https?:\/\//i.test(l)) ?? "";
+  return { url: link, title };
+}
+
 export function StudioModal({ open, onClose }: Props) {
   const [stations, setStations] = useState<Station[]>([]);
   const [songs, setSongs] = useState<Record<string, Song[]>>({});
