@@ -733,6 +733,7 @@ function StationPage() {
             audio-only playback and expands into an on-air video screen when a
             commercial is flagged to show its clip. */}
         <div
+          ref={ytWrapRef}
           className={
              showOnAirVideo
               ? "mt-6 mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full"
