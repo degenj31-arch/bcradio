@@ -43,6 +43,8 @@ declare global {
       mute(): void;
       unMute(): void;
       destroy(): void;
+      setSize(width: number, height: number): void;
+      getIframe?(): HTMLIFrameElement;
       loadVideoById(opts: { videoId: string; startSeconds?: number } | string): void;
     }
     interface PlayerOptions {
