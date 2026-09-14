@@ -625,6 +625,50 @@ function SongRow({ song, index, onMove, onDelete, onUpdate }: {
 function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial[]; onChanged: () => void }) {
   const [adding, setAdding] = useState(false);
   const [mode, setMode] = useState<"youtube" | "file">("youtube");
+  const [adUrl, setAdUrl] = useState("");
+  const [adTitle, setAdTitle] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const adFileRef = useRef<HTMLInputElement>(null);
+
+  const takeDrop = (dt: DataTransfer | null) => {
+    setDragOver(false);
+    const file = dt?.files?.[0];
+    if (file) {
+      setMode("file");
+      setAdTitle((t) => t || file.name.replace(/\.[^.]+$/, ""));
+      const box = new DataTransfer();
+      box.items.add(file);
+      if (adFileRef.current) adFileRef.current.files = box.files;
+      toast.success(`Dropped "${file.name}" — set the times, then schedule it`);
+      return;
+    }
+    const found = extractDroppedYouTube(dt);
+    if (!found) return toast.error("Drop a YouTube link or an audio/video file");
+    setMode("youtube");
+    setAdUrl(found.url);
+    if (found.title) setAdTitle((t) => t || found.title);
+    toast.success("YouTube link dropped — set the times, then schedule it");
+  };
+
+  useEffect(() => {
+    const over = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      setDragOver(true);
+    };
+    const leave = (e: DragEvent) => { if (!e.relatedTarget) setDragOver(false); };
+    const drop = (e: DragEvent) => { e.preventDefault(); takeDrop(e.dataTransfer); };
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const add = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
