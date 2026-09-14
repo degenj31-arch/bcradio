@@ -222,14 +222,18 @@ function StationPage() {
     try { muted ? yt.mute() : yt.unMute(); } catch { /* noop */ }
     applyVolume();
     yt.playVideo();
-    // Autoplay can silently stall on first tune-in — nudge until it really starts.
-    for (let i = 0; i < 10; i++) {
+    // Autoplay can silently stall on first tune-in or when a commercial swaps
+    // in a fresh clip — nudge, and reload the clip once if it is still stuck.
+    for (let i = 0; i < 24; i++) {
       await new Promise((r) => setTimeout(r, 400));
       if (stoppedRef.current) return;
       const st = ytState(yt);
       if (st === 1 || st === 3) {
         setPlaying(true);
         break;
+      }
+      if (i === 11) {
+        try { yt.loadVideoById({ videoId, startSeconds: offset }); } catch { /* noop */ }
       }
       try { if (!muted) yt.unMute(); yt.playVideo(); } catch { /* noop */ }
     }
