@@ -13,8 +13,8 @@ type Props = { open: boolean; onClose: () => void };
 
 // Pull a YouTube link (and a possible title) out of anything dragged in from
 // a browser tab, the YouTube app, or a bookmark.
-function extractDroppedYouTube(e: React.DragEvent): { url: string; title: string } | null {
-  const dt = e.dataTransfer;
+function extractDroppedYouTube(dt: DataTransfer | null): { url: string; title: string } | null {
+  if (!dt) return null;
   const raw = [
     dt.getData("text/uri-list"),
     dt.getData("text/x-moz-url"),
