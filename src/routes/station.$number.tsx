@@ -241,6 +241,10 @@ function StationPage() {
         setPlaying(true);
         break;
       }
+      const errCode = ytErrorRef.current?.code;
+      if (errCode === 101 || errCode === 150 || errCode === 100) {
+        throw new Error("That YouTube video can't be played on other sites — use a different video or upload the file.");
+      }
       if (i === 11) {
         try { yt.loadVideoById({ videoId, startSeconds: offset }); } catch { /* noop */ }
       }
