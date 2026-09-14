@@ -563,8 +563,8 @@ function StationPage() {
       const p = ytPlayerRef.current;
       if (!p) return;
       const box = ytWrapRef.current?.getBoundingClientRect();
-      const w = showOnAirVideo && box && box.width > 10 ? Math.round(box.width) : 320;
-      const h = showOnAirVideo && box && box.height > 10 ? Math.round(box.height) : 180;
+      const w = showOnAirVideo && box && box.width > 10 ? Math.round(box.width) : 640;
+      const h = showOnAirVideo && box && box.height > 10 ? Math.round(box.height) : 360;
       try { p.setSize(w, h); } catch { /* noop */ }
       try {
         const frame = p.getIframe?.();
@@ -573,6 +573,10 @@ function StationPage() {
           frame.style.height = "100%";
         }
       } catch { /* noop */ }
+      // A clip that went on air while the box was collapsed can sit paused.
+      if (showOnAirVideo) {
+        try { if (p.getPlayerState() !== 1 && p.getPlayerState() !== 3) p.playVideo(); } catch { /* noop */ }
+      }
     };
     // A few passes: the layout settles a frame or two after the class swap.
     const timers = [0, 60, 250, 800].map((ms) => setTimeout(resize, ms));
