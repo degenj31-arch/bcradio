@@ -760,8 +760,17 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
         </p>
       </div>
 
-      <form onSubmit={add} className="space-y-3 p-4 rounded-md border border-border bg-card/40">
+      <form
+        onSubmit={async (e) => { await add(e); setAdUrl(""); setAdTitle(""); }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); takeDrop(e.dataTransfer); }}
+        className={`space-y-3 p-4 rounded-md border bg-card/40 transition-colors ${dragOver ? "border-amber ring-2 ring-amber/50" : "border-border"}`}
+      >
         <div className="text-xs uppercase tracking-widest text-muted-foreground">New commercial</div>
+        <p className="text-xs text-muted-foreground">
+          Tip: drag a YouTube video (or an audio/video file) anywhere in here and the form fills itself in.
+        </p>
         <div className="flex gap-2">
           {(["youtube", "file"] as const).map((m) => (
             <button key={m} type="button" onClick={() => setMode(m)}
@@ -775,7 +784,8 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
         </div>
         {mode === "youtube" ? (
           <>
-            <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
+            <input name="url" value={adUrl} onChange={(e) => setAdUrl(e.target.value)}
+              placeholder="https://youtu.be/… (YouTube URL, or drag the video here)" required
               className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" name="show_video" className="accent-amber w-4 h-4" />
@@ -783,14 +793,13 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
             </label>
           </>
         ) : (
-          <input name="file" type="file" accept="audio/*,video/*" required
+          <input ref={adFileRef} name="file" type="file" accept="audio/*,video/*" required
             className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-amber file:text-primary-foreground" />
         )}
 
-
-
         <div className="grid sm:grid-cols-2 gap-3">
-          <input name="title" placeholder="Ad title (e.g. Local Diner Spot)" required
+          <input name="title" value={adTitle} onChange={(e) => setAdTitle(e.target.value)}
+            placeholder="Ad title (e.g. Local Diner Spot)" required
             className="bg-input border border-border rounded-md px-3 py-2" />
           <input name="times" placeholder="12:00, 21:00" required
             className="bg-input border border-border rounded-md px-3 py-2 font-mono" />
