@@ -221,6 +221,7 @@ function StationPage() {
     if (audioRef.current) audioRef.current.pause();
     activeSourceRef.current = "yt";
     const yt = await ensureYT();
+    if (ytErrorRef.current?.id !== videoId) ytErrorRef.current = null;
     if (currentYTIdRef.current !== videoId) {
       yt.loadVideoById({ videoId, startSeconds: offset });
       currentYTIdRef.current = videoId;
