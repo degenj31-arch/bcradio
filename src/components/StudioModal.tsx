@@ -13,8 +13,8 @@ type Props = { open: boolean; onClose: () => void };
 
 // Pull a YouTube link (and a possible title) out of anything dragged in from
 // a browser tab, the YouTube app, or a bookmark.
-function extractDroppedYouTube(e: React.DragEvent): { url: string; title: string } | null {
-  const dt = e.dataTransfer;
+function extractDroppedYouTube(dt: DataTransfer | null): { url: string; title: string } | null {
+  if (!dt) return null;
   const raw = [
     dt.getData("text/uri-list"),
     dt.getData("text/x-moz-url"),
@@ -331,26 +331,51 @@ function StationEditor({
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const onDropSong = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDropData = (dt: DataTransfer | null) => {
     setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
+    const file = dt?.files?.[0];
     if (file) {
       setTab("file");
       setFileTitle((t) => t || file.name.replace(/\.[^.]+$/, ""));
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      if (fileInputRef.current) fileInputRef.current.files = dt.files;
+      const box = new DataTransfer();
+      box.items.add(file);
+      if (fileInputRef.current) fileInputRef.current.files = box.files;
       toast.success(`Dropped "${file.name}" — add a title and upload`);
       return;
     }
-    const found = extractDroppedYouTube(e);
+    const found = extractDroppedYouTube(dt);
     if (!found) return toast.error("Drop a YouTube link or an audio/video file");
     setTab("youtube");
     setYtUrl(found.url);
     if (found.title) setYtTitle(found.title);
     toast.success("YouTube link dropped — check the title, then add it");
   };
+
+  const onDropSong = (e: React.DragEvent) => {
+    e.preventDefault();
+    handleDropData(e.dataTransfer);
+  };
+
+  // Dropping a link a few pixels outside the box used to make the browser
+  // navigate away instead. Catch drops anywhere in the studio window.
+  useEffect(() => {
+    const over = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      setDragOver(true);
+    };
+    const leave = (e: DragEvent) => { if (!e.relatedTarget) setDragOver(false); };
+    const drop = (e: DragEvent) => { e.preventDefault(); handleDropData(e.dataTransfer); };
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const mark = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
 
@@ -600,6 +625,50 @@ function SongRow({ song, index, onMove, onDelete, onUpdate }: {
 function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial[]; onChanged: () => void }) {
   const [adding, setAdding] = useState(false);
   const [mode, setMode] = useState<"youtube" | "file">("youtube");
+  const [adUrl, setAdUrl] = useState("");
+  const [adTitle, setAdTitle] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const adFileRef = useRef<HTMLInputElement>(null);
+
+  const takeDrop = (dt: DataTransfer | null) => {
+    setDragOver(false);
+    const file = dt?.files?.[0];
+    if (file) {
+      setMode("file");
+      setAdTitle((t) => t || file.name.replace(/\.[^.]+$/, ""));
+      const box = new DataTransfer();
+      box.items.add(file);
+      if (adFileRef.current) adFileRef.current.files = box.files;
+      toast.success(`Dropped "${file.name}" — set the times, then schedule it`);
+      return;
+    }
+    const found = extractDroppedYouTube(dt);
+    if (!found) return toast.error("Drop a YouTube link or an audio/video file");
+    setMode("youtube");
+    setAdUrl(found.url);
+    if (found.title) setAdTitle((t) => t || found.title);
+    toast.success("YouTube link dropped — set the times, then schedule it");
+  };
+
+  useEffect(() => {
+    const over = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      setDragOver(true);
+    };
+    const leave = (e: DragEvent) => { if (!e.relatedTarget) setDragOver(false); };
+    const drop = (e: DragEvent) => { e.preventDefault(); takeDrop(e.dataTransfer); };
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const add = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -691,8 +760,17 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
         </p>
       </div>
 
-      <form onSubmit={add} className="space-y-3 p-4 rounded-md border border-border bg-card/40">
+      <form
+        onSubmit={async (e) => { await add(e); setAdUrl(""); setAdTitle(""); }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); takeDrop(e.dataTransfer); }}
+        className={`space-y-3 p-4 rounded-md border bg-card/40 transition-colors ${dragOver ? "border-amber ring-2 ring-amber/50" : "border-border"}`}
+      >
         <div className="text-xs uppercase tracking-widest text-muted-foreground">New commercial</div>
+        <p className="text-xs text-muted-foreground">
+          Tip: drag a YouTube video (or an audio/video file) anywhere in here and the form fills itself in.
+        </p>
         <div className="flex gap-2">
           {(["youtube", "file"] as const).map((m) => (
             <button key={m} type="button" onClick={() => setMode(m)}
@@ -706,7 +784,8 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
         </div>
         {mode === "youtube" ? (
           <>
-            <input name="url" placeholder="https://youtu.be/… (YouTube URL)" required
+            <input name="url" value={adUrl} onChange={(e) => setAdUrl(e.target.value)}
+              placeholder="https://youtu.be/… (YouTube URL, or drag the video here)" required
               className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" name="show_video" className="accent-amber w-4 h-4" />
@@ -714,14 +793,13 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
             </label>
           </>
         ) : (
-          <input name="file" type="file" accept="audio/*,video/*" required
+          <input ref={adFileRef} name="file" type="file" accept="audio/*,video/*" required
             className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-amber file:text-primary-foreground" />
         )}
 
-
-
         <div className="grid sm:grid-cols-2 gap-3">
-          <input name="title" placeholder="Ad title (e.g. Local Diner Spot)" required
+          <input name="title" value={adTitle} onChange={(e) => setAdTitle(e.target.value)}
+            placeholder="Ad title (e.g. Local Diner Spot)" required
             className="bg-input border border-border rounded-md px-3 py-2" />
           <input name="times" placeholder="12:00, 21:00" required
             className="bg-input border border-border rounded-md px-3 py-2 font-mono" />

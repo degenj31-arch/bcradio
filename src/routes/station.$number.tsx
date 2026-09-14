@@ -60,6 +60,7 @@ function StationPage() {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
+  const ytErrorRef = useRef<{ id: string | null; code: number } | null>(null);
   const ytWrapRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
   const activeAdKeyRef = useRef<string | null>(null);
@@ -158,7 +159,14 @@ function StationPage() {
         height: "100%",
         width: "100%",
         playerVars: { autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, modestbranding: 1, rel: 0 },
-        events: { onReady: () => resolve(p) },
+        events: {
+          onReady: () => resolve(p),
+          // 101/150 = the owner disabled embedding, so it can never play here.
+          onError: (err) => {
+            ytErrorRef.current = { id: currentYTIdRef.current, code: err.data };
+            console.error("[youtube]", err.data, currentYTIdRef.current);
+          },
+        },
       });
     });
     ytPlayerRef.current = player;
@@ -213,6 +221,7 @@ function StationPage() {
     if (audioRef.current) audioRef.current.pause();
     activeSourceRef.current = "yt";
     const yt = await ensureYT();
+    if (ytErrorRef.current?.id !== videoId) ytErrorRef.current = null;
     if (currentYTIdRef.current !== videoId) {
       yt.loadVideoById({ videoId, startSeconds: offset });
       currentYTIdRef.current = videoId;
@@ -222,14 +231,22 @@ function StationPage() {
     try { muted ? yt.mute() : yt.unMute(); } catch { /* noop */ }
     applyVolume();
     yt.playVideo();
-    // Autoplay can silently stall on first tune-in — nudge until it really starts.
-    for (let i = 0; i < 10; i++) {
+    // Autoplay can silently stall on first tune-in or when a commercial swaps
+    // in a fresh clip — nudge, and reload the clip once if it is still stuck.
+    for (let i = 0; i < 24; i++) {
       await new Promise((r) => setTimeout(r, 400));
       if (stoppedRef.current) return;
       const st = ytState(yt);
       if (st === 1 || st === 3) {
         setPlaying(true);
         break;
+      }
+      const errCode = ytErrorRef.current?.code;
+      if (errCode === 101 || errCode === 150 || errCode === 100) {
+        throw new Error("That YouTube video can't be played on other sites — use a different video or upload the file.");
+      }
+      if (i === 11) {
+        try { yt.loadVideoById({ videoId, startSeconds: offset }); } catch { /* noop */ }
       }
       try { if (!muted) yt.unMute(); yt.playVideo(); } catch { /* noop */ }
     }
@@ -563,8 +580,8 @@ function StationPage() {
       const p = ytPlayerRef.current;
       if (!p) return;
       const box = ytWrapRef.current?.getBoundingClientRect();
-      const w = showOnAirVideo && box && box.width > 10 ? Math.round(box.width) : 320;
-      const h = showOnAirVideo && box && box.height > 10 ? Math.round(box.height) : 180;
+      const w = showOnAirVideo && box && box.width > 10 ? Math.round(box.width) : 640;
+      const h = showOnAirVideo && box && box.height > 10 ? Math.round(box.height) : 360;
       try { p.setSize(w, h); } catch { /* noop */ }
       try {
         const frame = p.getIframe?.();
@@ -573,6 +590,10 @@ function StationPage() {
           frame.style.height = "100%";
         }
       } catch { /* noop */ }
+      // A clip that went on air while the box was collapsed can sit paused.
+      if (showOnAirVideo) {
+        try { if (p.getPlayerState() !== 1 && p.getPlayerState() !== 3) p.playVideo(); } catch { /* noop */ }
+      }
     };
     // A few passes: the layout settles a frame or two after the class swap.
     const timers = [0, 60, 250, 800].map((ms) => setTimeout(resize, ms));
@@ -735,9 +756,10 @@ function StationPage() {
         <div
           ref={ytWrapRef}
           className={
-             showOnAirVideo
-              ? "mt-6 mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full"
-              : "pointer-events-none fixed -left-[9999px] -top-[9999px] h-px w-px overflow-hidden"
+            "mx-auto w-full max-w-xl overflow-hidden [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full " +
+            (showOnAirVideo
+              ? "mt-6 rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video"
+              : "pointer-events-none h-0 opacity-0")
           }
           aria-hidden={!showOnAirVideo}
         >
