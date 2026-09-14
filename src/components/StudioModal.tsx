@@ -331,26 +331,51 @@ function StationEditor({
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const onDropSong = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDropData = (dt: DataTransfer | null) => {
     setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
+    const file = dt?.files?.[0];
     if (file) {
       setTab("file");
       setFileTitle((t) => t || file.name.replace(/\.[^.]+$/, ""));
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      if (fileInputRef.current) fileInputRef.current.files = dt.files;
+      const box = new DataTransfer();
+      box.items.add(file);
+      if (fileInputRef.current) fileInputRef.current.files = box.files;
       toast.success(`Dropped "${file.name}" — add a title and upload`);
       return;
     }
-    const found = extractDroppedYouTube(e);
+    const found = extractDroppedYouTube(dt);
     if (!found) return toast.error("Drop a YouTube link or an audio/video file");
     setTab("youtube");
     setYtUrl(found.url);
     if (found.title) setYtTitle(found.title);
     toast.success("YouTube link dropped — check the title, then add it");
   };
+
+  const onDropSong = (e: React.DragEvent) => {
+    e.preventDefault();
+    handleDropData(e.dataTransfer);
+  };
+
+  // Dropping a link a few pixels outside the box used to make the browser
+  // navigate away instead. Catch drops anywhere in the studio window.
+  useEffect(() => {
+    const over = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      setDragOver(true);
+    };
+    const leave = (e: DragEvent) => { if (!e.relatedTarget) setDragOver(false); };
+    const drop = (e: DragEvent) => { e.preventDefault(); handleDropData(e.dataTransfer); };
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const mark = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
 
