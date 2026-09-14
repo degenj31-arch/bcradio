@@ -158,7 +158,14 @@ function StationPage() {
         height: "100%",
         width: "100%",
         playerVars: { autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, modestbranding: 1, rel: 0 },
-        events: { onReady: () => resolve(p) },
+        events: {
+          onReady: () => resolve(p),
+          // 101/150 = the owner disabled embedding, so it can never play here.
+          onError: (err) => {
+            ytErrorRef.current = { id: currentYTIdRef.current, code: err.data };
+            console.error("[youtube]", err.data, currentYTIdRef.current);
+          },
+        },
       });
     });
     ytPlayerRef.current = player;
