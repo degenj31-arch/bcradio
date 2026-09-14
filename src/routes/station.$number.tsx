@@ -739,9 +739,10 @@ function StationPage() {
         <div
           ref={ytWrapRef}
           className={
-             showOnAirVideo
-              ? "mt-6 mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full"
-              : "pointer-events-none fixed -left-[9999px] -top-[9999px] h-px w-px overflow-hidden"
+            "mx-auto w-full max-w-xl overflow-hidden [&_iframe]:h-full [&_iframe]:w-full [&>div]:h-full [&>div]:w-full " +
+            (showOnAirVideo
+              ? "mt-6 rounded-lg border border-amber/40 bg-black shadow-[0_0_40px_-10px_var(--amber,#f59e0b)] aspect-video"
+              : "pointer-events-none h-0 opacity-0")
           }
           aria-hidden={!showOnAirVideo}
         >
