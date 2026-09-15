@@ -74,6 +74,57 @@ export type Database = {
         }
         Relationships: []
       }
+      podcast_episodes: {
+        Row: {
+          audio_url: string | null
+          cover_url: string | null
+          created_at: string
+          description: string | null
+          duration_seconds: number
+          episode_number: number
+          host: string | null
+          id: string
+          plays: number
+          published_at: string
+          show_name: string
+          title: string
+          updated_at: string
+          youtube_id: string | null
+        }
+        Insert: {
+          audio_url?: string | null
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number
+          episode_number?: number
+          host?: string | null
+          id?: string
+          plays?: number
+          published_at?: string
+          show_name?: string
+          title: string
+          updated_at?: string
+          youtube_id?: string | null
+        }
+        Update: {
+          audio_url?: string | null
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number
+          episode_number?: number
+          host?: string | null
+          id?: string
+          plays?: number
+          published_at?: string
+          show_name?: string
+          title?: string
+          updated_at?: string
+          youtube_id?: string | null
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           auth: string
