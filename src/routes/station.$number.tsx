@@ -566,22 +566,23 @@ function StationPage() {
     return () => clearInterval(id);
   }, [current, ad, station, isHD2, playing, t]);
 
-  // Whether the embedded clip should be visible on air.
-  const showOnAirVideo = !!(
-    !offAir && !needsGesture && !tuning &&
-    ((ad?.show_video && ad.youtube_id) || (!ad && current?.show_video && current.youtube_id))
-  );
+  // The clip on air right now, if the source is YouTube.
+  const onAirYouTubeId = ad ? ad.youtube_id : current?.youtube_id ?? null;
+  const flaggedForVideo = ad ? !!ad.show_video : !!current?.show_video;
+  const canShowVideo = !!(onAirYouTubeId && !offAir && !needsGesture && !tuning);
+  // Listeners can force the picture on or off; otherwise follow the studio flag.
+  const showOnAirVideo = canShowVideo && (videoPref ?? flaggedForVideo);
 
-  // The player is built while parked off-screen, so YouTube lays it out at a
-  // tiny size and keeps painting nothing when the screen expands. Re-measure
-  // and resize the player whenever the on-air screen opens or the window moves.
+  // The player keeps its full on-screen size at all times (an off-screen or
+  // zero-height iframe makes YouTube stop painting), so switching to video is
+  // just a matter of lifting the cover panel off it.
   useEffect(() => {
     const resize = () => {
       const p = ytPlayerRef.current;
       if (!p) return;
       const box = ytWrapRef.current?.getBoundingClientRect();
-      const w = showOnAirVideo && box && box.width > 10 ? Math.round(box.width) : 640;
-      const h = showOnAirVideo && box && box.height > 10 ? Math.round(box.height) : 360;
+      const w = box && box.width > 10 ? Math.round(box.width) : 640;
+      const h = box && box.height > 10 ? Math.round(box.height) : 360;
       try { p.setSize(w, h); } catch { /* noop */ }
       try {
         const frame = p.getIframe?.();
@@ -590,19 +591,18 @@ function StationPage() {
           frame.style.height = "100%";
         }
       } catch { /* noop */ }
-      // A clip that went on air while the box was collapsed can sit paused.
       if (showOnAirVideo) {
         try { if (p.getPlayerState() !== 1 && p.getPlayerState() !== 3) p.playVideo(); } catch { /* noop */ }
       }
     };
-    // A few passes: the layout settles a frame or two after the class swap.
+    // A few passes: the layout settles a frame or two after a state change.
     const timers = [0, 60, 250, 800].map((ms) => setTimeout(resize, ms));
     window.addEventListener("resize", resize);
     return () => {
       timers.forEach(clearTimeout);
       window.removeEventListener("resize", resize);
     };
-  }, [showOnAirVideo, ad, current]);
+  }, [showOnAirVideo, ad, current, needsGesture, offAir]);
 
 
   const toggleMute = () => {
