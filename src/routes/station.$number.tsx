@@ -798,6 +798,15 @@ function StationPage() {
             <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               {t("syncedNote")}
             </div>
+            {canShowVideo && (
+              <button
+                onClick={() => setVideoPref(!showOnAirVideo)}
+                className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-border text-muted-foreground hover:text-amber hover:border-amber/50"
+              >
+                {showOnAirVideo ? "Hide video" : "Show video"}
+              </button>
+            )}
+
             {station && (
               <div className="mt-2 flex gap-2">
                 {!isHD2 ? (
