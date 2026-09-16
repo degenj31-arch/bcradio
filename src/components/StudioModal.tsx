@@ -34,7 +34,7 @@ export function StudioModal({ open, onClose }: Props) {
   const [songs, setSongs] = useState<Record<string, Song[]>>({});
   const [commercials, setCommercials] = useState<Commercial[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [view, setView] = useState<"station" | "commercials">("station");
+  const [view, setView] = useState<"station" | "commercials" | "podcasts">("station");
   const [loading, setLoading] = useState(false);
   const [mobileShowEditor, setMobileShowEditor] = useState(false);
   const navigate = useNavigate();
