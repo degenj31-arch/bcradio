@@ -89,6 +89,38 @@ export function StudioModal({ open, onClose }: Props) {
     setMobileShowEditor(true);
   };
 
+  const openPodcasts = () => {
+    setView("podcasts");
+    setMobileShowEditor(true);
+  };
+
+  const handlePlaylistAdd = async (url: string) => {
+    if (!selectedId) { toast.error("Pick a station first"); return; }
+    setLoading(true);
+    try {
+      toast.message("Reading that playlist from YouTube…");
+      const { items } = await fetchYouTubePlaylist({ data: { url } });
+      let pos = (selectedSongs[selectedSongs.length - 1]?.position ?? -1) + 1;
+      const rows = items.map((it) => ({
+        station_id: selectedId,
+        title: it.title,
+        artist: null,
+        audio_url: null,
+        youtube_id: it.videoId,
+        duration_seconds: it.durationSeconds || 180,
+        position: pos++,
+      }));
+      const { error } = await supabase.from("songs").insert(rows);
+      if (error) throw error;
+      toast.success(`✓ Added ${rows.length} song${rows.length === 1 ? "" : "s"} from that playlist`);
+      await refresh(selectedId);
+    } catch (err) {
+      console.error("[playlist]", err);
+      toast.error(err instanceof Error ? err.message : "Could not read that playlist");
+    } finally { setLoading(false); }
+  };
+
+
   const handleFileUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedId) { toast.error("Pick a station first"); return; }
