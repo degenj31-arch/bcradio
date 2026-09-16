@@ -286,6 +286,18 @@ export function StudioModal({ open, onClose }: Props) {
                     <div className="text-xs truncate">{commercials.length} scheduled</div>
                   </div>
                 </button>
+                <button
+                  onClick={openPodcasts}
+                  className={`mt-2 w-full text-left px-3 py-2 rounded-md transition flex items-center gap-2 ${
+                    view === "podcasts" ? "bg-accent text-foreground" : "hover:bg-accent/50 text-muted-foreground"
+                  }`}
+                >
+                  <Mic className="w-4 h-4 text-amber shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">Podcasts</div>
+                    <div className="text-xs truncate">On-demand episodes</div>
+                  </div>
+                </button>
               </div>
             </aside>
 
