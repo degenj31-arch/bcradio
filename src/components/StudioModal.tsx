@@ -308,7 +308,9 @@ export function StudioModal({ open, onClose }: Props) {
               >
                 ← Back
               </button>
-              {view === "commercials" ? (
+              {view === "podcasts" ? (
+                <PodcastsEditor />
+              ) : view === "commercials" ? (
                 <CommercialsEditor commercials={commercials} onChanged={() => refresh(selectedId)} />
               ) : !selected ? (
                 <div className="text-muted-foreground">Select a station.</div>
