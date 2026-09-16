@@ -294,6 +294,8 @@ function Home() {
         )}
       </div>
 
+      <PodcastSection />
+
       <NetworkSection />
 
       <WeatherSection />
