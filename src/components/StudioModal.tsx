@@ -587,6 +587,39 @@ function StationEditor({
         )}
       </div>
 
+      <div className="rounded-lg border border-border p-3">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-2">
+          <ListMusic className="w-4 h-4 text-amber" /> Import a YouTube playlist
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Paste a playlist link and every video in it is added to this station, in order.
+        </p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const url = playlistUrl.trim();
+            if (!url) return;
+            await onPlaylistAdd(url);
+            setPlaylistUrl("");
+          }}
+          className="flex flex-col sm:flex-row gap-2"
+        >
+          <input
+            value={playlistUrl}
+            onChange={(e) => setPlaylistUrl(e.target.value)}
+            placeholder="https://www.youtube.com/playlist?list=…"
+            className="flex-1 bg-input border border-border rounded-md px-3 py-2 font-mono text-sm"
+          />
+          <button disabled={uploading} type="submit"
+            className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60 shrink-0">
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListMusic className="w-4 h-4" />}
+            {uploading ? "Adding…" : "Add whole playlist"}
+          </button>
+        </form>
+      </div>
+
+
+
 
       <div>
         <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
