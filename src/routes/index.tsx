@@ -17,6 +17,7 @@ import { Radio, Moon, Download, Users, Bell, BellOff, CloudSun, ListMusic } from
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { NetworkSection } from "@/components/NetworkSection";
+import { PodcastSection } from "@/components/PodcastSection";
 
 
 
