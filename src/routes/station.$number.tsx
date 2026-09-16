@@ -57,6 +57,8 @@ function StationPage() {
   const [offAir, setOffAir] = useState(isOffAir());
   const [tick, setTick] = useState(0); // 1Hz repaint for clock/listeners
   const [etTimeStr, setEtTimeStr] = useState("--:--:-- ET");
+  const [videoPref, setVideoPref] = useState<boolean | null>(null);
+
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const ytHolderRef = useRef<HTMLDivElement>(null);
