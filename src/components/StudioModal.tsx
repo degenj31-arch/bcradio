@@ -712,7 +712,6 @@ function CommercialsEditor({ commercials, onChanged }: { commercials: Commercial
   const [adUrl, setAdUrl] = useState("");
   const [adTitle, setAdTitle] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [playlistUrl, setPlaylistUrl] = useState("");
   const adFileRef = useRef<HTMLInputElement>(null);
 
   const takeDrop = (dt: DataTransfer | null) => {
