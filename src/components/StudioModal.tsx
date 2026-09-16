@@ -327,6 +327,7 @@ export function StudioModal({ open, onClose }: Props) {
                   }}
                   onFileUpload={handleFileUpload}
                   onYouTubeAdd={handleYouTubeAdd}
+                  onPlaylistAdd={handlePlaylistAdd}
                   uploading={loading}
                   onUpdateSong={updateSong}
                   onDeleteSong={deleteSong}
