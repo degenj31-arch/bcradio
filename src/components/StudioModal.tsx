@@ -343,7 +343,7 @@ export function StudioModal({ open, onClose }: Props) {
 }
 
 function StationEditor({
-  station, songs, onSaved, onDelete, onTuneIn, onFileUpload, onYouTubeAdd, uploading,
+  station, songs, onSaved, onDelete, onTuneIn, onFileUpload, onYouTubeAdd, onPlaylistAdd, uploading,
   onUpdateSong, onDeleteSong, onMoveSong,
 }: {
   station: Station;
@@ -353,6 +353,7 @@ function StationEditor({
   onTuneIn: () => void;
   onFileUpload: (e: React.FormEvent<HTMLFormElement>) => void;
   onYouTubeAdd: (e: React.FormEvent<HTMLFormElement>) => void;
+  onPlaylistAdd: (url: string) => void | Promise<void>;
   uploading: boolean;
   onUpdateSong: (id: string, patch: Partial<Song>) => void;
   onDeleteSong: (s: Song) => void;
