@@ -5,8 +5,10 @@ import { extractDuration, uploadAudio, fmtTime } from "@/lib/radio";
 import { parseYouTubeId, fetchYouTubeDuration, formatOffAirWindow, parseScheduleTime, formatScheduleTime } from "@/lib/youtube";
 import { fetchCommercials, type Commercial } from "@/lib/commercials";
 import type { Station, Song } from "@/lib/radio";
-import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube, Megaphone, Bell, Monitor } from "lucide-react";
+import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube, Megaphone, Bell, Monitor, Mic, ListMusic } from "lucide-react";
 import { sendTestBroadcast } from "@/lib/push";
+import { fetchYouTubePlaylist } from "@/lib/youtube-playlist.functions";
+import { PodcastsEditor } from "@/components/PodcastsEditor";
 import { toast } from "sonner";
 
 type Props = { open: boolean; onClose: () => void };
@@ -34,7 +36,7 @@ export function StudioModal({ open, onClose }: Props) {
   const [songs, setSongs] = useState<Record<string, Song[]>>({});
   const [commercials, setCommercials] = useState<Commercial[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [view, setView] = useState<"station" | "commercials">("station");
+  const [view, setView] = useState<"station" | "commercials" | "podcasts">("station");
   const [loading, setLoading] = useState(false);
   const [mobileShowEditor, setMobileShowEditor] = useState(false);
   const navigate = useNavigate();
@@ -88,6 +90,38 @@ export function StudioModal({ open, onClose }: Props) {
     setView("commercials");
     setMobileShowEditor(true);
   };
+
+  const openPodcasts = () => {
+    setView("podcasts");
+    setMobileShowEditor(true);
+  };
+
+  const handlePlaylistAdd = async (url: string) => {
+    if (!selectedId) { toast.error("Pick a station first"); return; }
+    setLoading(true);
+    try {
+      toast.message("Reading that playlist from YouTube…");
+      const { items } = await fetchYouTubePlaylist({ data: { url } });
+      let pos = (selectedSongs[selectedSongs.length - 1]?.position ?? -1) + 1;
+      const rows = items.map((it) => ({
+        station_id: selectedId,
+        title: it.title,
+        artist: null,
+        audio_url: null,
+        youtube_id: it.videoId,
+        duration_seconds: it.durationSeconds || 180,
+        position: pos++,
+      }));
+      const { error } = await supabase.from("songs").insert(rows);
+      if (error) throw error;
+      toast.success(`✓ Added ${rows.length} song${rows.length === 1 ? "" : "s"} from that playlist`);
+      await refresh(selectedId);
+    } catch (err) {
+      console.error("[playlist]", err);
+      toast.error(err instanceof Error ? err.message : "Could not read that playlist");
+    } finally { setLoading(false); }
+  };
+
 
   const handleFileUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -252,6 +286,18 @@ export function StudioModal({ open, onClose }: Props) {
                     <div className="text-xs truncate">{commercials.length} scheduled</div>
                   </div>
                 </button>
+                <button
+                  onClick={openPodcasts}
+                  className={`mt-2 w-full text-left px-3 py-2 rounded-md transition flex items-center gap-2 ${
+                    view === "podcasts" ? "bg-accent text-foreground" : "hover:bg-accent/50 text-muted-foreground"
+                  }`}
+                >
+                  <Mic className="w-4 h-4 text-amber shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">Podcasts</div>
+                    <div className="text-xs truncate">On-demand episodes</div>
+                  </div>
+                </button>
               </div>
             </aside>
 
@@ -262,7 +308,9 @@ export function StudioModal({ open, onClose }: Props) {
               >
                 ← Back
               </button>
-              {view === "commercials" ? (
+              {view === "podcasts" ? (
+                <PodcastsEditor />
+              ) : view === "commercials" ? (
                 <CommercialsEditor commercials={commercials} onChanged={() => refresh(selectedId)} />
               ) : !selected ? (
                 <div className="text-muted-foreground">Select a station.</div>
@@ -279,6 +327,7 @@ export function StudioModal({ open, onClose }: Props) {
                   }}
                   onFileUpload={handleFileUpload}
                   onYouTubeAdd={handleYouTubeAdd}
+                  onPlaylistAdd={handlePlaylistAdd}
                   uploading={loading}
                   onUpdateSong={updateSong}
                   onDeleteSong={deleteSong}
@@ -294,7 +343,7 @@ export function StudioModal({ open, onClose }: Props) {
 }
 
 function StationEditor({
-  station, songs, onSaved, onDelete, onTuneIn, onFileUpload, onYouTubeAdd, uploading,
+  station, songs, onSaved, onDelete, onTuneIn, onFileUpload, onYouTubeAdd, onPlaylistAdd, uploading,
   onUpdateSong, onDeleteSong, onMoveSong,
 }: {
   station: Station;
@@ -304,6 +353,7 @@ function StationEditor({
   onTuneIn: () => void;
   onFileUpload: (e: React.FormEvent<HTMLFormElement>) => void;
   onYouTubeAdd: (e: React.FormEvent<HTMLFormElement>) => void;
+  onPlaylistAdd: (url: string) => void | Promise<void>;
   uploading: boolean;
   onUpdateSong: (id: string, patch: Partial<Song>) => void;
   onDeleteSong: (s: Song) => void;
@@ -329,6 +379,7 @@ function StationEditor({
   const [ytTitle, setYtTitle] = useState("");
   const [fileTitle, setFileTitle] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [playlistUrl, setPlaylistUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDropData = (dt: DataTransfer | null) => {
@@ -536,6 +587,39 @@ function StationEditor({
           </form>
         )}
       </div>
+
+      <div className="rounded-lg border border-border p-3">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-2">
+          <ListMusic className="w-4 h-4 text-amber" /> Import a YouTube playlist
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Paste a playlist link and every video in it is added to this station, in order.
+        </p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const url = playlistUrl.trim();
+            if (!url) return;
+            await onPlaylistAdd(url);
+            setPlaylistUrl("");
+          }}
+          className="flex flex-col sm:flex-row gap-2"
+        >
+          <input
+            value={playlistUrl}
+            onChange={(e) => setPlaylistUrl(e.target.value)}
+            placeholder="https://www.youtube.com/playlist?list=…"
+            className="flex-1 bg-input border border-border rounded-md px-3 py-2 font-mono text-sm"
+          />
+          <button disabled={uploading} type="submit"
+            className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60 shrink-0">
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListMusic className="w-4 h-4" />}
+            {uploading ? "Adding…" : "Add whole playlist"}
+          </button>
+        </form>
+      </div>
+
+
 
 
       <div>
