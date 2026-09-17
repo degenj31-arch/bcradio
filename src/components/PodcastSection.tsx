@@ -161,7 +161,7 @@ export function PodcastSection() {
             playerVars: { autoplay: 1, controls: 0, playsinline: 1, start: Math.floor(start) },
             events: {
               onReady: (e) => {
-                e.target.setPlaybackRate(rate);
+                (e.target as unknown as { setPlaybackRate?: (r: number) => void }).setPlaybackRate?.(rate);
                 e.target.playVideo();
                 setDuration(e.target.getDuration() || Number(ep.duration_seconds) || 0);
               },
@@ -255,7 +255,7 @@ export function PodcastSection() {
   useEffect(() => {
     const a = audioRef.current;
     if (a) a.playbackRate = rate;
-    ytRef.current?.setPlaybackRate(rate);
+    (ytRef.current as unknown as { setPlaybackRate?: (r: number) => void } | null)?.setPlaybackRate?.(rate);
   }, [rate, audioSrc]);
 
   useEffect(() => () => destroyYt(), []);
