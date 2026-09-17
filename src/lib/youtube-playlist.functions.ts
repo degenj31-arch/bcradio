@@ -78,7 +78,7 @@ function collectItems(node: unknown, out: PlaylistItem[], seen: Set<string>) {
     }
   }
   for (const key of Object.keys(obj)) {
-    if (key === "playlistVideoRenderer") continue;
+    if (key === "playlistVideoRenderer" || key === "lockupViewModel") continue;
     collectItems(obj[key], out, seen);
   }
 }
