@@ -34,6 +34,33 @@ function collectItems(node: unknown, out: PlaylistItem[], seen: Set<string>) {
     return;
   }
   const obj = node as Record<string, unknown>;
+
+  // 2025+ layout: lockupViewModel entries
+  const lv = obj["lockupViewModel"] as Record<string, unknown> | undefined;
+  if (lv && typeof lv["contentId"] === "string" && String(lv["contentType"] ?? "").includes("VIDEO")) {
+    const videoId = lv["contentId"] as string;
+    if (!seen.has(videoId)) {
+      seen.add(videoId);
+      const meta = lv["metadata"] as
+        | { lockupMetadataViewModel?: { title?: { content?: string } } }
+        | undefined;
+      const title = meta?.lockupMetadataViewModel?.title?.content?.trim() || `Video ${videoId}`;
+      let duration = 0;
+      const badges: string[] = [];
+      const grabBadges = (n: unknown) => {
+        if (!n || typeof n !== "object") return;
+        if (Array.isArray(n)) return n.forEach(grabBadges);
+        const o = n as Record<string, unknown>;
+        const b = o["thumbnailBadgeViewModel"] as { text?: string } | undefined;
+        if (b?.text && /^\d+(:\d{2})+$/.test(b.text.trim())) badges.push(b.text.trim());
+        for (const k of Object.keys(o)) grabBadges(o[k]);
+      };
+      grabBadges(lv["contentImage"]);
+      if (badges[0]) duration = parseLengthText(badges[0]);
+      out.push({ videoId, title, durationSeconds: duration || 0 });
+    }
+  }
+
   const r = obj["playlistVideoRenderer"] as Record<string, unknown> | undefined;
   if (r && typeof r["videoId"] === "string") {
     const videoId = r["videoId"] as string;
