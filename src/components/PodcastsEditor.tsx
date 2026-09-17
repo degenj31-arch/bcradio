@@ -118,8 +118,13 @@ export function PodcastsEditor() {
         <input name="host" placeholder="Host (optional)"
           className="bg-input border border-border rounded-md px-3 py-2" />
       </div>
-      <input name="show_name" placeholder="Show name (default: BCradio Podcast)"
+      <input name="show_name" list="bcradio-shows" placeholder="Show name — groups episodes together (default: BCradio Podcast)"
         className="w-full bg-input border border-border rounded-md px-3 py-2" />
+      <datalist id="bcradio-shows">
+        {[...new Set(episodes.map((e) => e.show_name).filter(Boolean))].map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
       <textarea name="description" placeholder="Episode description (optional)" rows={3}
         className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm" />
     </>
