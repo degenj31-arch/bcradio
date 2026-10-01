@@ -209,7 +209,7 @@ export function PodcastsEditor() {
               return (
                 <div key={name} className="flex items-center gap-3 px-3 py-2 rounded-md bg-card/50 border border-border">
                   <div className="flex-1 min-w-0 text-sm truncate">{name} <span className="text-muted-foreground text-xs">· {eps.length} ep</span></div>
-                  <select value={cats.length === 1 ? (cats[0] ?? "") : ""} onChange={(e) => setCategory(eps.map((x) => x.id), e.target.value)}
+                  <select value={cats.length === 1 ? String(cats[0] ?? "") : ""} onChange={(e) => setCategory(eps.map((x) => x.id), e.target.value)}
                     className="bg-input border border-border rounded px-1.5 py-1 text-[11px]" aria-label="Album category">
                     <option value="">{cats.length > 1 ? "Mixed" : "No category"}</option>
                     {PODCAST_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
