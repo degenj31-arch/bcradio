@@ -20,6 +20,7 @@ import { getPlayableUrl, fmtTime } from "@/lib/radio";
 import { loadYouTubeAPI } from "@/lib/youtube";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { PODCAST_CATEGORIES, episodeCategory } from "@/lib/podcast-categories";
 
 type SortKey = "new" | "old" | "plays";
 
@@ -45,6 +46,7 @@ function writeProgress(next: Record<string, number>) {
 export function PodcastSection() {
   const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("new");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [active, setActive] = useState<PodcastEpisode | null>(null);
@@ -87,18 +89,19 @@ export function PodcastSection() {
     const q = query.trim().toLowerCase();
     const list = episodes.filter(
       (e) =>
-        !q ||
+        (!category || episodeCategory(e) === category) &&
+        (!q ||
         e.title.toLowerCase().includes(q) ||
         (e.description ?? "").toLowerCase().includes(q) ||
         (e.host ?? "").toLowerCase().includes(q) ||
-        (e.show_name ?? "").toLowerCase().includes(q)
+        (e.show_name ?? "").toLowerCase().includes(q))
     );
     const sorted = [...list];
     if (sort === "old") sorted.sort((a, b) => a.published_at.localeCompare(b.published_at));
     else if (sort === "plays") sorted.sort((a, b) => Number(b.plays) - Number(a.plays));
     else sorted.sort((a, b) => b.published_at.localeCompare(a.published_at));
     return sorted;
-  }, [episodes, query, sort]);
+  }, [episodes, query, sort, category]);
 
   // Group episodes that belong to the same show.
   const shows = useMemo(() => {
@@ -273,7 +276,7 @@ export function PodcastSection() {
       <div
         aria-hidden
         className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full blur-3xl opacity-25"
-        style={{ background: "radial-gradient(circle, var(--amber, #f59e0b), transparent 70%)" }}
+        style={{ background: "radial-gradient(circle, var(--amber-glow), transparent 70%)" }}
       />
       {/* Audio-only: the YouTube player is mounted off-screen so nothing is ever shown. */}
       <div ref={ytHostRef} aria-hidden className="absolute -left-[9999px] top-0 h-1 w-1 overflow-hidden" />
@@ -295,6 +298,42 @@ export function PodcastSection() {
           <div>{totalMinutes} min of listening</div>
         </div>
       </header>
+
+      <div className="relative mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground">Browse by category</div>
+          {category && (
+            <button onClick={() => setCategory(null)} className="text-[11px] font-mono uppercase tracking-widest text-amber hover:underline">
+              ← All podcasts
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {PODCAST_CATEGORIES.map((c) => {
+            const count = episodes.filter((e) => episodeCategory(e) === c.name).length;
+            const on = category === c.name;
+            return (
+              <button
+                key={c.name}
+                onClick={() => setCategory(on ? null : c.name)}
+                className={`group relative aspect-square rounded-xl overflow-hidden border text-left transition ${
+                  on ? "border-amber ring-2 ring-amber/60" : "border-border hover:border-amber/60"
+                } ${category && !on ? "opacity-50 hover:opacity-100" : ""}`}
+              >
+                <img src={c.cover} alt="" loading="lazy" width={816} height={816}
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <span className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+                <span className="absolute bottom-0 left-0 right-0 p-2.5">
+                  <span className="block font-display text-sm leading-tight text-foreground">{c.name}</span>
+                  <span className="block font-mono text-[10px] text-muted-foreground mt-0.5">
+                    {count} episode{count === 1 ? "" : "s"}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="relative flex flex-wrap items-center gap-2 mb-5">
         <div className="relative flex-1 min-w-[200px]">
@@ -536,7 +575,9 @@ export function PodcastSection() {
         <div className="relative text-center py-12 text-muted-foreground text-sm">
           {episodes.length === 0
             ? "No episodes yet. Record one in the studio or drop in a YouTube link."
-            : "No episodes match that search."}
+            : category
+              ? `Nothing labeled "${category}" yet.`
+              : "No episodes match that search."}
         </div>
       )}
     </section>

@@ -5,6 +5,7 @@ import { parseYouTubeId, fetchYouTubeDuration } from "@/lib/youtube";
 import { fetchEpisodes, formatEpisodeDate, type PodcastEpisode } from "@/lib/podcasts";
 import { Loader2, Mic, Trash2, Upload, Youtube } from "lucide-react";
 import { toast } from "sonner";
+import { PODCAST_CATEGORIES, episodeCategory } from "@/lib/podcast-categories";
 
 export function PodcastsEditor() {
   const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
@@ -51,7 +52,8 @@ export function PodcastsEditor() {
         youtube_id: videoId,
         duration_seconds: duration,
         episode_number: nextNumber(),
-      });
+        category: String(fd.get("category") || "") || null,
+      } as never);
       if (error) throw error;
       toast.success(`✓ Episode "${title}" published`);
       form.reset();
@@ -89,7 +91,8 @@ export function PodcastsEditor() {
         audio_url: path,
         duration_seconds: duration,
         episode_number: nextNumber(),
-      });
+        category: String(fd.get("category") || "") || null,
+      } as never);
       if (error) throw error;
       toast.success(`✓ Episode "${title}" published (${fmtTime(duration)})`);
       form.reset();
@@ -110,6 +113,16 @@ export function PodcastsEditor() {
     load();
   };
 
+  const setCategory = async (ids: string[], category: string) => {
+    const { error } = await supabase.from("podcast_episodes")
+      .update({ category: category || null } as never).in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(category ? `Marked as ${category}` : "Category cleared");
+    load();
+  };
+
+  const showNames = [...new Set(episodes.map((e) => e.show_name).filter(Boolean))];
+
   const common = (
     <>
       <div className="grid sm:grid-cols-2 gap-3">
@@ -125,6 +138,11 @@ export function PodcastsEditor() {
           <option key={s} value={s} />
         ))}
       </datalist>
+      <select name="category" defaultValue=""
+        className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm">
+        <option value="">Category (optional)</option>
+        {PODCAST_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+      </select>
       <textarea name="description" placeholder="Episode description (optional)" rows={3}
         className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm" />
     </>
@@ -181,6 +199,28 @@ export function PodcastsEditor() {
         </form>
       )}
 
+      {showNames.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Label a whole podcast album</div>
+          <div className="space-y-1">
+            {showNames.map((name) => {
+              const eps = episodes.filter((e) => e.show_name === name);
+              const cats = [...new Set(eps.map(episodeCategory))];
+              return (
+                <div key={name} className="flex items-center gap-3 px-3 py-2 rounded-md bg-card/50 border border-border">
+                  <div className="flex-1 min-w-0 text-sm truncate">{name} <span className="text-muted-foreground text-xs">· {eps.length} ep</span></div>
+                  <select value={cats.length === 1 ? (cats[0] ?? "") : ""} onChange={(e) => setCategory(eps.map((x) => x.id), e.target.value)}
+                    className="bg-input border border-border rounded px-1.5 py-1 text-[11px]" aria-label="Album category">
+                    <option value="">{cats.length > 1 ? "Mixed" : "No category"}</option>
+                    {PODCAST_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div>
         <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
           {episodes.length} episode{episodes.length === 1 ? "" : "s"}
@@ -195,6 +235,11 @@ export function PodcastsEditor() {
                   {ep.show_name} · {formatEpisodeDate(ep.published_at)} · {fmtTime(Number(ep.duration_seconds))}
                 </div>
               </div>
+              <select value={episodeCategory(ep) ?? ""} onChange={(e) => setCategory([ep.id], e.target.value)}
+                className="bg-input border border-border rounded px-1.5 py-1 text-[11px] max-w-[130px]" aria-label="Episode category">
+                <option value="">No category</option>
+                {PODCAST_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
               <button onClick={() => remove(ep)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-destructive" aria-label="Delete episode">
                 <Trash2 className="w-4 h-4" />
               </button>
