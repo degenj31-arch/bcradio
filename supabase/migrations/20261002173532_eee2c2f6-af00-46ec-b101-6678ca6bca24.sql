@@ -1,0 +1,1 @@
+ALTER TABLE public.podcast_episodes ADD COLUMN IF NOT EXISTS category text;

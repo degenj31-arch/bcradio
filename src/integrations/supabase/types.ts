@@ -77,6 +77,7 @@ export type Database = {
       podcast_episodes: {
         Row: {
           audio_url: string | null
+          category: string | null
           cover_url: string | null
           created_at: string
           description: string | null
@@ -93,6 +94,7 @@ export type Database = {
         }
         Insert: {
           audio_url?: string | null
+          category?: string | null
           cover_url?: string | null
           created_at?: string
           description?: string | null
@@ -109,6 +111,7 @@ export type Database = {
         }
         Update: {
           audio_url?: string | null
+          category?: string | null
           cover_url?: string | null
           created_at?: string
           description?: string | null
