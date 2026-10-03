@@ -43,6 +43,12 @@ export function seededShuffle<T>(arr: T[], seedStr: string): T[] {
   return a;
 }
 
-export function hd2Playlist(stationId: string, songs: Song[]): Song[] {
-  return seededShuffle(songs, `hd2:${stationId}`);
+// HD-2 plays the same ordered playlist as the main station, offset by 10
+// songs ahead (wrapping around), so it stays deterministic worldwide.
+export const HD2_OFFSET = 10;
+
+export function hd2Playlist(_stationId: string, songs: Song[]): Song[] {
+  if (songs.length === 0) return songs;
+  const off = HD2_OFFSET % songs.length;
+  return songs.slice(off).concat(songs.slice(0, off));
 }
