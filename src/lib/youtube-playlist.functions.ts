@@ -90,11 +90,8 @@ function findContinuations(node: unknown): string[] {
     if (!n || typeof n !== "object") return;
     if (Array.isArray(n)) { n.forEach(walk); return; }
     const obj = n as Record<string, unknown>;
-    const cir = obj["continuationItemRenderer"] as
-      | { continuationEndpoint?: { continuationCommand?: { token?: string } } }
-      | undefined;
-    const t = cir?.continuationEndpoint?.continuationCommand?.token;
-    if (t) all.push(t);
+    const cc = obj["continuationCommand"] as { token?: string } | undefined;
+    if (cc && typeof cc.token === "string") all.push(cc.token);
     for (const k of Object.keys(obj)) walk(obj[k]);
   };
   walk(node);
