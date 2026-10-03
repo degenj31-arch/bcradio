@@ -83,6 +83,21 @@ function collectItems(node: unknown, out: PlaylistItem[], seen: Set<string>) {
   }
 }
 
+// Collect every continuation token; the caller tries each until one yields new videos.
+function findContinuations(node: unknown): string[] {
+  const all: string[] = [];
+  const walk = (n: unknown) => {
+    if (!n || typeof n !== "object") return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    const obj = n as Record<string, unknown>;
+    const cc = obj["continuationCommand"] as { token?: string } | undefined;
+    if (cc && typeof cc.token === "string") all.push(cc.token);
+    for (const k of Object.keys(obj)) walk(obj[k]);
+  };
+  walk(node);
+  return all;
+}
+
 const input = z.object({ url: z.string().min(3) });
 
 export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
@@ -128,7 +143,32 @@ export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
     if (!json) throw new Error("Could not read that playlist. Make sure it is public or unlisted, not private.");
 
     const items: PlaylistItem[] = [];
-    collectItems(json, items, new Set<string>());
+    const seen = new Set<string>();
+    collectItems(json, items, seen);
     if (!items.length) throw new Error("No videos found in that playlist (private playlists can't be read).");
+
+    // YouTube only sends ~100 per page; follow continuation tokens for the rest.
+    const apiKey = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1];
+    const clientVersion = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)?.[1] ?? "2.20250101.00.00";
+    const queue = findContinuations(json);
+    const used = new Set<string>();
+    const url = `https://www.youtube.com/youtubei/v1/browse?prettyPrint=false${apiKey ? `&key=${apiKey}` : ""}`;
+    while (queue.length && used.size < 200) {
+      const token = queue.shift()!;
+      if (used.has(token)) continue;
+      used.add(token);
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion, hl: "en" } }, continuation: token }),
+        });
+        if (!r.ok) continue;
+        const page = (await r.json()) as unknown;
+        const before = items.length;
+        collectItems(page, items, seen);
+        if (items.length > before) queue.unshift(...findContinuations(page));
+      } catch { /* try next token */ }
+    }
     return { playlistId, items };
   });
