@@ -83,6 +83,22 @@ function collectItems(node: unknown, out: PlaylistItem[], seen: Set<string>) {
   }
 }
 
+function findContinuation(node: unknown): string | null {
+  if (!node || typeof node !== "object") return null;
+  if (Array.isArray(node)) {
+    for (const c of node) { const t = findContinuation(c); if (t) return t; }
+    return null;
+  }
+  const obj = node as Record<string, unknown>;
+  const cir = obj["continuationItemRenderer"] as
+    | { continuationEndpoint?: { continuationCommand?: { token?: string } } }
+    | undefined;
+  const t = cir?.continuationEndpoint?.continuationCommand?.token;
+  if (t) return t;
+  for (const k of Object.keys(obj)) { const r = findContinuation(obj[k]); if (r) return r; }
+  return null;
+}
+
 const input = z.object({ url: z.string().min(3) });
 
 export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
@@ -128,7 +144,36 @@ export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
     if (!json) throw new Error("Could not read that playlist. Make sure it is public or unlisted, not private.");
 
     const items: PlaylistItem[] = [];
-    collectItems(json, items, new Set<string>());
+    const seen = new Set<string>();
+    collectItems(json, items, seen);
     if (!items.length) throw new Error("No videos found in that playlist (private playlists can't be read).");
+
+    // YouTube only sends ~100 per page; follow continuation tokens for the rest.
+    const apiKey = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1];
+    const clientVersion = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)?.[1] ?? "2.20250101.00.00";
+    let token = findContinuation(json);
+    const used = new Set<string>();
+    let pages = 0;
+    while (token && !used.has(token) && pages < 100) {
+      used.add(token);
+      pages++;
+      const r = await fetch(
+        `https://www.youtube.com/youtubei/v1/browse${apiKey ? `?key=${apiKey}` : ""}&prettyPrint=false`.replace("browse&", "browse?"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 Chrome/124.0" },
+          body: JSON.stringify({
+            context: { client: { clientName: "WEB", clientVersion, hl: "en" } },
+            continuation: token,
+          }),
+        },
+      );
+      if (!r.ok) break;
+      const page = (await r.json()) as unknown;
+      const before = items.length;
+      collectItems(page, items, seen);
+      if (items.length === before) break;
+      token = findContinuation(page);
+    }
     return { playlistId, items };
   });
