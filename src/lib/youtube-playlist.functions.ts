@@ -83,9 +83,9 @@ function collectItems(node: unknown, out: PlaylistItem[], seen: Set<string>) {
   }
 }
 
-// Returns the LAST continuation token (the playlist's "load more"; earlier ones belong to other shelves).
-function findContinuation(node: unknown): string | null {
-  let last: string | null = null;
+// Collect every continuation token; the caller tries each until one yields new videos.
+function findContinuations(node: unknown): string[] {
+  const all: string[] = [];
   const walk = (n: unknown) => {
     if (!n || typeof n !== "object") return;
     if (Array.isArray(n)) { n.forEach(walk); return; }
@@ -94,11 +94,11 @@ function findContinuation(node: unknown): string | null {
       | { continuationEndpoint?: { continuationCommand?: { token?: string } } }
       | undefined;
     const t = cir?.continuationEndpoint?.continuationCommand?.token;
-    if (t) last = t;
+    if (t) all.push(t);
     for (const k of Object.keys(obj)) walk(obj[k]);
   };
   walk(node);
-  return last;
+  return all;
 }
 
 const input = z.object({ url: z.string().min(3) });
@@ -153,29 +153,25 @@ export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
     // YouTube only sends ~100 per page; follow continuation tokens for the rest.
     const apiKey = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1];
     const clientVersion = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)?.[1] ?? "2.20250101.00.00";
-    let token = findContinuation(json);
+    const queue = findContinuations(json);
     const used = new Set<string>();
-    let pages = 0;
-    while (token && !used.has(token) && pages < 100) {
+    const url = `https://www.youtube.com/youtubei/v1/browse?prettyPrint=false${apiKey ? `&key=${apiKey}` : ""}`;
+    while (queue.length && used.size < 200) {
+      const token = queue.shift()!;
+      if (used.has(token)) continue;
       used.add(token);
-      pages++;
-      const r = await fetch(
-        `https://www.youtube.com/youtubei/v1/browse${apiKey ? `?key=${apiKey}` : ""}&prettyPrint=false`.replace("browse&", "browse?"),
-        {
+      try {
+        const r = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 Chrome/124.0" },
-          body: JSON.stringify({
-            context: { client: { clientName: "WEB", clientVersion, hl: "en" } },
-            continuation: token,
-          }),
-        },
-      );
-      if (!r.ok) break;
-      const page = (await r.json()) as unknown;
-      const before = items.length;
-      collectItems(page, items, seen);
-      if (items.length === before) break;
-      token = findContinuation(page);
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion, hl: "en" } }, continuation: token }),
+        });
+        if (!r.ok) continue;
+        const page = (await r.json()) as unknown;
+        const before = items.length;
+        collectItems(page, items, seen);
+        if (items.length > before) queue.unshift(...findContinuations(page));
+      } catch { /* try next token */ }
     }
     return { playlistId, items };
   });
