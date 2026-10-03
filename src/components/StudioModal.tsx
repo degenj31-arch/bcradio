@@ -213,6 +213,18 @@ export function StudioModal({ open, onClose }: Props) {
     refresh(selectedId);
   };
 
+  const deleteSongs = async (list: Song[]) => {
+    const files = list.map((s) => s.audio_url).filter(Boolean) as string[];
+    if (files.length) await supabase.storage.from("radio-audio").remove(files).catch(() => {});
+    const ids = list.map((s) => s.id);
+    for (let i = 0; i < ids.length; i += 200) {
+      const { error } = await supabase.from("songs").delete().in("id", ids.slice(i, i + 200));
+      if (error) { toast.error(error.message); break; }
+    }
+    toast.success(`Deleted ${list.length} song${list.length === 1 ? "" : "s"}`);
+    refresh(selectedId);
+  };
+
   const move = async (s: Song, dir: -1 | 1) => {
     const list = selectedSongs;
     const i = list.findIndex((x) => x.id === s.id);
@@ -331,6 +343,7 @@ export function StudioModal({ open, onClose }: Props) {
                   uploading={loading}
                   onUpdateSong={updateSong}
                   onDeleteSong={deleteSong}
+                  onDeleteSongs={deleteSongs}
                   onMoveSong={move}
                 />
               )}
@@ -344,7 +357,7 @@ export function StudioModal({ open, onClose }: Props) {
 
 function StationEditor({
   station, songs, onSaved, onDelete, onTuneIn, onFileUpload, onYouTubeAdd, onPlaylistAdd, uploading,
-  onUpdateSong, onDeleteSong, onMoveSong,
+  onUpdateSong, onDeleteSong, onDeleteSongs, onMoveSong,
 }: {
   station: Station;
   songs: Song[];
@@ -357,8 +370,18 @@ function StationEditor({
   uploading: boolean;
   onUpdateSong: (id: string, patch: Partial<Song>) => void;
   onDeleteSong: (s: Song) => void;
+  onDeleteSongs: (s: Song[]) => Promise<void>;
   onMoveSong: (s: Song, dir: -1 | 1) => void;
 }) {
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const dragMode = useRef<boolean | null>(null);
+  const setOne = (id: string, v: boolean) =>
+    setPicked((prev) => {
+      if (prev.has(id) === v) return prev;
+      const n = new Set(prev);
+      if (v) n.add(id); else n.delete(id);
+      return n;
+    });
   const [number, setNumber] = useState<string>(String(Number(station.number)));
   const [name, setName] = useState(station.name);
   const [tagline, setTagline] = useState(station.tagline ?? "");
