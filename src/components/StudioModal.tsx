@@ -627,16 +627,51 @@ function StationEditor({
           Playlist · {songs.length} song{songs.length === 1 ? "" : "s"}
           {" · "}{fmtTime(songs.reduce((a, s) => a + Number(s.duration_seconds), 0))} total
         </div>
-        <div className="space-y-1">
+        {songs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+            <button type="button" onClick={() => setPicked(picked.size === songs.length ? new Set() : new Set(songs.map((s) => s.id)))}
+              className="px-2 py-1 rounded bg-accent">{picked.size === songs.length ? "Clear selection" : "Select all"}</button>
+            <span className="text-muted-foreground">{picked.size} selected · tip: press a checkbox and slide over rows</span>
+            {picked.size > 0 && (
+              <button type="button" onClick={async () => {
+                if (!confirm(`Delete ${picked.size} song${picked.size === 1 ? "" : "s"}?`)) return;
+                await onDeleteSongs(songs.filter((s) => picked.has(s.id)));
+                setPicked(new Set());
+              }} className="ml-auto px-2 py-1 rounded bg-destructive text-destructive-foreground inline-flex items-center gap-1">
+                <Trash2 className="w-3.5 h-3.5" /> Delete selected
+              </button>
+            )}
+          </div>
+        )}
+        <div className="space-y-1 select-none" onPointerUp={() => (dragMode.current = null)} onPointerLeave={() => (dragMode.current = null)}>
           {songs.length === 0 && (
             <div className="text-sm text-muted-foreground py-4">No songs yet. Add one above.</div>
           )}
           {songs.map((s, i) => (
-            <SongRow key={s.id} song={s} index={i}
-              onMove={(d) => onMoveSong(s, d)}
-              onDelete={() => onDeleteSong(s)}
-              onUpdate={(patch) => onUpdateSong(s.id, patch)}
-            />
+            <div key={s.id} data-song-id={s.id} className="flex items-center gap-2"
+              onPointerEnter={() => { if (dragMode.current !== null) setOne(s.id, dragMode.current); }}>
+              <input type="checkbox" aria-label={`Select ${s.title}`} checked={picked.has(s.id)} readOnly
+                className="w-4 h-4 shrink-0 accent-[var(--color-primary)] cursor-pointer touch-none"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+                  const v = !picked.has(s.id);
+                  dragMode.current = v;
+                  setOne(s.id, v);
+                }}
+                onPointerMove={(e) => {
+                  if (dragMode.current === null || e.pointerType === "mouse") return;
+                  const el = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-song-id]") as HTMLElement | null;
+                  if (el?.dataset.songId) setOne(el.dataset.songId, dragMode.current);
+                }} />
+              <div className="flex-1 min-w-0">
+                <SongRow song={s} index={i}
+                  onMove={(d) => onMoveSong(s, d)}
+                  onDelete={() => onDeleteSong(s)}
+                  onUpdate={(patch) => onUpdateSong(s.id, patch)}
+                />
+              </div>
+            </div>
           ))}
         </div>
       </div>
