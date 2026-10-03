@@ -83,20 +83,22 @@ function collectItems(node: unknown, out: PlaylistItem[], seen: Set<string>) {
   }
 }
 
+// Returns the LAST continuation token (the playlist's "load more"; earlier ones belong to other shelves).
 function findContinuation(node: unknown): string | null {
-  if (!node || typeof node !== "object") return null;
-  if (Array.isArray(node)) {
-    for (const c of node) { const t = findContinuation(c); if (t) return t; }
-    return null;
-  }
-  const obj = node as Record<string, unknown>;
-  const cir = obj["continuationItemRenderer"] as
-    | { continuationEndpoint?: { continuationCommand?: { token?: string } } }
-    | undefined;
-  const t = cir?.continuationEndpoint?.continuationCommand?.token;
-  if (t) return t;
-  for (const k of Object.keys(obj)) { const r = findContinuation(obj[k]); if (r) return r; }
-  return null;
+  let last: string | null = null;
+  const walk = (n: unknown) => {
+    if (!n || typeof n !== "object") return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    const obj = n as Record<string, unknown>;
+    const cir = obj["continuationItemRenderer"] as
+      | { continuationEndpoint?: { continuationCommand?: { token?: string } } }
+      | undefined;
+    const t = cir?.continuationEndpoint?.continuationCommand?.token;
+    if (t) last = t;
+    for (const k of Object.keys(obj)) walk(obj[k]);
+  };
+  walk(node);
+  return last;
 }
 
 const input = z.object({ url: z.string().min(3) });
