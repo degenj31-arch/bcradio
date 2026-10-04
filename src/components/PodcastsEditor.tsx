@@ -10,7 +10,7 @@ import { PODCAST_CATEGORIES, episodeCategory } from "@/lib/podcast-categories";
 
 export function PodcastsEditor() {
   const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
-  const [mode, setMode] = useState<"youtube" | "file">("youtube");
+  const [mode, setMode] = useState<"youtube" | "file" | "playlist">("youtube");
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -101,6 +101,40 @@ export function PodcastsEditor() {
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addPlaylist = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const url = String(fd.get("url") || "").trim();
+    const showName = String(fd.get("show_name") || "").trim() || "BCradio Podcast";
+    const category = String(fd.get("category") || "") || null;
+    if (!url) return toast.error("Paste a YouTube playlist link");
+    setBusy(true);
+    try {
+      toast.message("Reading playlist…");
+      const { items } = await fetchYouTubePlaylist({ data: { url } });
+      if (!items.length) throw new Error("No videos found in that playlist");
+      let n = nextNumber();
+      const rows = items.map((it) => ({
+        title: it.title,
+        show_name: showName,
+        youtube_id: it.videoId,
+        duration_seconds: it.durationSeconds || 0,
+        episode_number: n++,
+        category,
+      }));
+      const { error } = await supabase.from("podcast_episodes").insert(rows as never);
+      if (error) throw error;
+      toast.success(`✓ Imported ${items.length} episodes into "${showName}"`);
+      form.reset();
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Playlist import failed");
     } finally {
       setBusy(false);
     }
