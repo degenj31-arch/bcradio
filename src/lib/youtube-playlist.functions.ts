@@ -106,15 +106,38 @@ export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
     const playlistId = extractPlaylistId(data.url);
     if (!playlistId) throw new Error("That doesn't look like a YouTube playlist link (it needs a ?list=… part).");
 
-    const res = await fetch(`https://www.youtube.com/playlist?list=${playlistId}&hl=en`, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    });
-    if (!res.ok) throw new Error(`YouTube refused the request (${res.status}).`);
-    const html = await res.text();
+    const UA =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+    const hosts = ["https://www.youtube.com", "https://m.youtube.com"];
+    let html = "";
+    let lastStatus = 0;
+    outer: for (let attempt = 0; attempt < 6; attempt++) {
+      const host = hosts[attempt % hosts.length];
+      try {
+        const res = await fetch(`${host}/playlist?list=${playlistId}&hl=en`, {
+          headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+        });
+        lastStatus = res.status;
+        if (res.ok) {
+          html = await res.text();
+          break outer;
+        }
+        if (res.status !== 429 && res.status !== 503) {
+          throw new Error(`YouTube refused the request (${res.status}).`);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith("YouTube refused")) throw e;
+      }
+      // 429/503: back off and try the other host
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+    if (!html) {
+      throw new Error(
+        lastStatus === 429
+          ? "YouTube is rate-limiting imports right now. Wait a minute and try again."
+          : `YouTube refused the request (${lastStatus || "no response"}).`,
+      );
+    }
 
     const marker = "var ytInitialData = ";
     const start = html.indexOf(marker);
