@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { extractDuration, uploadAudio, fmtTime } from "@/lib/radio";
 import { parseYouTubeId, fetchYouTubeDuration } from "@/lib/youtube";
 import { fetchEpisodes, formatEpisodeDate, type PodcastEpisode } from "@/lib/podcasts";
-import { Loader2, Mic, Trash2, Upload, Youtube } from "lucide-react";
+import { ListMusic, Loader2, Mic, Trash2, Upload, Youtube } from "lucide-react";
+import { fetchYouTubePlaylist } from "@/lib/youtube-playlist.functions";
 import { toast } from "sonner";
 import { PODCAST_CATEGORIES, episodeCategory } from "@/lib/podcast-categories";
 
