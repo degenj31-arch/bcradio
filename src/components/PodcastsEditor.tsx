@@ -208,6 +208,12 @@ export function PodcastsEditor() {
           }`}>
           <Upload className="w-4 h-4" /> Upload recording
         </button>
+        <button type="button" onClick={() => setMode("playlist")}
+          className={`px-3 py-1.5 rounded-md text-sm flex items-center gap-1.5 ${
+            mode === "playlist" ? "bg-amber text-primary-foreground" : "bg-accent text-muted-foreground"
+          }`}>
+          <ListMusic className="w-4 h-4" /> From playlist
+        </button>
       </div>
 
       {mode === "youtube" ? (
@@ -219,6 +225,23 @@ export function PodcastsEditor() {
             className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Youtube className="w-4 h-4" />}
             {busy ? "Publishing…" : "Publish episode"}
+          </button>
+        </form>
+      ) : mode === "playlist" ? (
+        <form onSubmit={addPlaylist} className="space-y-3">
+          <input name="url" required placeholder="https://youtube.com/playlist?list=…"
+            className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+          <input name="show_name" list="bcradio-shows" placeholder="Show name — every video becomes an episode of this show"
+            className="w-full bg-input border border-border rounded-md px-3 py-2" />
+          <select name="category" defaultValue=""
+            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm">
+            <option value="">Category (optional)</option>
+            {PODCAST_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          </select>
+          <button disabled={busy} type="submit"
+            className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListMusic className="w-4 h-4" />}
+            {busy ? "Importing…" : "Import playlist as episodes"}
           </button>
         </form>
       ) : (
