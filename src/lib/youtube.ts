@@ -46,6 +46,9 @@ declare global {
       setSize(width: number, height: number): void;
       getIframe?(): HTMLIFrameElement;
       loadVideoById(opts: { videoId: string; startSeconds?: number } | string): void;
+      getPlaylist?(): string[] | null;
+      playVideoAt?(index: number): void;
+      getVideoData?(): { video_id?: string; title?: string; author?: string };
     }
     interface PlayerOptions {
       videoId?: string;
