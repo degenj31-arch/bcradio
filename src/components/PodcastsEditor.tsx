@@ -3,13 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { extractDuration, uploadAudio, fmtTime } from "@/lib/radio";
 import { parseYouTubeId, fetchYouTubeDuration } from "@/lib/youtube";
 import { fetchEpisodes, formatEpisodeDate, type PodcastEpisode } from "@/lib/podcasts";
-import { Loader2, Mic, Trash2, Upload, Youtube } from "lucide-react";
+import { ListMusic, Loader2, Mic, Trash2, Upload, Youtube } from "lucide-react";
+import { fetchYouTubePlaylist } from "@/lib/youtube-playlist.functions";
 import { toast } from "sonner";
 import { PODCAST_CATEGORIES, episodeCategory } from "@/lib/podcast-categories";
 
 export function PodcastsEditor() {
   const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
-  const [mode, setMode] = useState<"youtube" | "file">("youtube");
+  const [mode, setMode] = useState<"youtube" | "file" | "playlist">("youtube");
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -105,6 +106,40 @@ export function PodcastsEditor() {
     }
   };
 
+  const addPlaylist = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const url = String(fd.get("url") || "").trim();
+    const showName = String(fd.get("show_name") || "").trim() || "BCradio Podcast";
+    const category = String(fd.get("category") || "") || null;
+    if (!url) return toast.error("Paste a YouTube playlist link");
+    setBusy(true);
+    try {
+      toast.message("Reading playlist…");
+      const { items } = await fetchYouTubePlaylist({ data: { url } });
+      if (!items.length) throw new Error("No videos found in that playlist");
+      let n = nextNumber();
+      const rows = items.map((it) => ({
+        title: it.title,
+        show_name: showName,
+        youtube_id: it.videoId,
+        duration_seconds: it.durationSeconds || 0,
+        episode_number: n++,
+        category,
+      }));
+      const { error } = await supabase.from("podcast_episodes").insert(rows as never);
+      if (error) throw error;
+      toast.success(`✓ Imported ${items.length} episodes into "${showName}"`);
+      form.reset();
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Playlist import failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async (ep: PodcastEpisode) => {
     if (!confirm(`Delete "${ep.title}"?`)) return;
     if (ep.audio_url) await supabase.storage.from("radio-audio").remove([ep.audio_url]);
@@ -173,6 +208,12 @@ export function PodcastsEditor() {
           }`}>
           <Upload className="w-4 h-4" /> Upload recording
         </button>
+        <button type="button" onClick={() => setMode("playlist")}
+          className={`px-3 py-1.5 rounded-md text-sm flex items-center gap-1.5 ${
+            mode === "playlist" ? "bg-amber text-primary-foreground" : "bg-accent text-muted-foreground"
+          }`}>
+          <ListMusic className="w-4 h-4" /> From playlist
+        </button>
       </div>
 
       {mode === "youtube" ? (
@@ -184,6 +225,23 @@ export function PodcastsEditor() {
             className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Youtube className="w-4 h-4" />}
             {busy ? "Publishing…" : "Publish episode"}
+          </button>
+        </form>
+      ) : mode === "playlist" ? (
+        <form onSubmit={addPlaylist} className="space-y-3">
+          <input name="url" required placeholder="https://youtube.com/playlist?list=…"
+            className="w-full bg-input border border-border rounded-md px-3 py-2 font-mono text-sm" />
+          <input name="show_name" list="bcradio-shows" placeholder="Show name — every video becomes an episode of this show"
+            className="w-full bg-input border border-border rounded-md px-3 py-2" />
+          <select name="category" defaultValue=""
+            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm">
+            <option value="">Category (optional)</option>
+            {PODCAST_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          </select>
+          <button disabled={busy} type="submit"
+            className="px-4 py-2 rounded-md bg-amber text-primary-foreground font-medium flex items-center gap-2 disabled:opacity-60">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListMusic className="w-4 h-4" />}
+            {busy ? "Importing…" : "Import playlist as episodes"}
           </button>
         </form>
       ) : (
