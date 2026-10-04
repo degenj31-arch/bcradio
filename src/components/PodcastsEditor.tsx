@@ -4,7 +4,7 @@ import { extractDuration, uploadAudio, fmtTime } from "@/lib/radio";
 import { parseYouTubeId, fetchYouTubeDuration } from "@/lib/youtube";
 import { fetchEpisodes, formatEpisodeDate, type PodcastEpisode } from "@/lib/podcasts";
 import { ListMusic, Loader2, Mic, Trash2, Upload, Youtube } from "lucide-react";
-import { fetchYouTubePlaylist } from "@/lib/youtube-playlist.functions";
+import { importYouTubePlaylist } from "@/lib/youtube-playlist-import";
 import { toast } from "sonner";
 import { PODCAST_CATEGORIES, episodeCategory } from "@/lib/podcast-categories";
 
@@ -116,8 +116,12 @@ export function PodcastsEditor() {
     if (!url) return toast.error("Paste a YouTube playlist link");
     setBusy(true);
     try {
-      toast.message("Reading playlist…");
-      const { items } = await fetchYouTubePlaylist({ data: { url } });
+      const tid = toast.loading("Reading playlist…");
+      let items;
+      try {
+        items = await importYouTubePlaylist(url, (d, t) =>
+          toast.loading(`Reading episode ${d} of ${t}…`, { id: tid }));
+      } finally { toast.dismiss(tid); }
       if (!items.length) throw new Error("No videos found in that playlist");
       let n = nextNumber();
       const rows = items.map((it) => ({

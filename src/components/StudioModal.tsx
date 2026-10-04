@@ -7,7 +7,7 @@ import { fetchCommercials, type Commercial } from "@/lib/commercials";
 import type { Station, Song } from "@/lib/radio";
 import { X, Plus, Trash2, Pencil, ArrowUp, ArrowDown, Upload, Radio, Loader2, Save, Youtube, Megaphone, Bell, Monitor, Mic, ListMusic } from "lucide-react";
 import { sendTestBroadcast } from "@/lib/push";
-import { fetchYouTubePlaylist } from "@/lib/youtube-playlist.functions";
+import { importYouTubePlaylist } from "@/lib/youtube-playlist-import";
 import { PodcastsEditor } from "@/components/PodcastsEditor";
 import { toast } from "sonner";
 
@@ -100,8 +100,12 @@ export function StudioModal({ open, onClose }: Props) {
     if (!selectedId) { toast.error("Pick a station first"); return; }
     setLoading(true);
     try {
-      toast.message("Reading that playlist from YouTube…");
-      const { items } = await fetchYouTubePlaylist({ data: { url } });
+      const tid = toast.loading("Reading that playlist from YouTube…");
+      let items;
+      try {
+        items = await importYouTubePlaylist(url, (d, t) =>
+          toast.loading(`Reading video ${d} of ${t}…`, { id: tid }));
+      } finally { toast.dismiss(tid); }
       let pos = (selectedSongs[selectedSongs.length - 1]?.position ?? -1) + 1;
       const rows = items.map((it) => ({
         station_id: selectedId,
