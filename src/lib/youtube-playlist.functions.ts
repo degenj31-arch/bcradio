@@ -108,62 +108,75 @@ export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
 
     const UA =
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-    const hosts = ["https://www.youtube.com", "https://m.youtube.com"];
-    let html = "";
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const clients = [
+      { clientName: "WEB", clientVersion: "2.20250101.00.00", host: "https://www.youtube.com" },
+      { clientName: "MWEB", clientVersion: "2.20250101.00.00", host: "https://m.youtube.com" },
+      { clientName: "WEB", clientVersion: "2.20250101.00.00", host: "https://youtubei.googleapis.com" },
+    ];
     let lastStatus = 0;
-    outer: for (let attempt = 0; attempt < 6; attempt++) {
-      const host = hosts[attempt % hosts.length];
-      try {
-        const res = await fetch(`${host}/playlist?list=${playlistId}&hl=en`, {
-          headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
-        });
-        lastStatus = res.status;
-        if (res.ok) {
-          html = await res.text();
-          break outer;
+
+    // Call YouTube's internal browse API directly (far less rate-limited than the HTML page).
+    const browse = async (body: Record<string, unknown>): Promise<unknown | null> => {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const c = clients[attempt % clients.length];
+        try {
+          const res = await fetch(`${c.host}/youtubei/v1/browse?prettyPrint=false`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": UA,
+              "Accept-Language": "en-US,en;q=0.9",
+              Origin: "https://www.youtube.com",
+            },
+            body: JSON.stringify({
+              context: { client: { clientName: c.clientName, clientVersion: c.clientVersion, hl: "en", gl: "US" } },
+              ...body,
+            }),
+          });
+          lastStatus = res.status;
+          if (res.ok) return await res.json();
+          if (res.status !== 429 && res.status !== 503 && res.status !== 403) return null;
+        } catch {
+          /* network blip — retry */
         }
-        if (res.status !== 429 && res.status !== 503) {
-          throw new Error(`YouTube refused the request (${res.status}).`);
-        }
-      } catch (e) {
-        if (e instanceof Error && e.message.startsWith("YouTube refused")) throw e;
+        await sleep(500 * (attempt + 1));
       }
-      // 429/503: back off and try the other host
-      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-    }
-    if (!html) {
-      throw new Error(
-        lastStatus === 429
-          ? "YouTube is rate-limiting imports right now. Wait a minute and try again."
-          : `YouTube refused the request (${lastStatus || "no response"}).`,
-      );
+      return null;
+    };
+
+    let json: unknown = await browse({ browseId: `VL${playlistId}` });
+
+    // Fallback: scrape the playlist HTML page.
+    if (!json) {
+      for (let attempt = 0; attempt < 4 && !json; attempt++) {
+        const host = attempt % 2 ? "https://m.youtube.com" : "https://www.youtube.com";
+        try {
+          const res = await fetch(`${host}/playlist?list=${playlistId}&hl=en`, {
+            headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+          });
+          lastStatus = res.status;
+          if (res.ok) {
+            const html = await res.text();
+            const m =
+              html.match(/var ytInitialData = (\{.+?\});<\/script>/s) ||
+              html.match(/ytInitialData"\]\s*=\s*(\{.+?\});/s);
+            if (m) {
+              try { json = JSON.parse(m[1]); } catch { json = null; }
+            }
+          }
+        } catch { /* retry */ }
+        if (!json) await sleep(800 * (attempt + 1));
+      }
     }
 
-    const marker = "var ytInitialData = ";
-    const start = html.indexOf(marker);
-    let json: unknown = null;
-    if (start >= 0) {
-      const from = start + marker.length;
-      const end = html.indexOf("};", from);
-      if (end > from) {
-        try {
-          json = JSON.parse(html.slice(from, end + 1));
-        } catch {
-          json = null;
-        }
-      }
-    }
     if (!json) {
-      const alt = html.match(/ytInitialData"\]\s*=\s*(\{.+?\});/s);
-      if (alt) {
-        try {
-          json = JSON.parse(alt[1]);
-        } catch {
-          json = null;
-        }
-      }
+      throw new Error(
+        lastStatus === 429
+          ? "YouTube is rate-limiting imports right now. Wait a few minutes and try again."
+          : "Could not read that playlist. Make sure it is public or unlisted, not private.",
+      );
     }
-    if (!json) throw new Error("Could not read that playlist. Make sure it is public or unlisted, not private.");
 
     const items: PlaylistItem[] = [];
     const seen = new Set<string>();
@@ -171,27 +184,17 @@ export const fetchYouTubePlaylist = createServerFn({ method: "POST" })
     if (!items.length) throw new Error("No videos found in that playlist (private playlists can't be read).");
 
     // YouTube only sends ~100 per page; follow continuation tokens for the rest.
-    const apiKey = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1];
-    const clientVersion = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)?.[1] ?? "2.20250101.00.00";
     const queue = findContinuations(json);
     const used = new Set<string>();
-    const url = `https://www.youtube.com/youtubei/v1/browse?prettyPrint=false${apiKey ? `&key=${apiKey}` : ""}`;
     while (queue.length && used.size < 200) {
       const token = queue.shift()!;
       if (used.has(token)) continue;
       used.add(token);
-      try {
-        const r = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion, hl: "en" } }, continuation: token }),
-        });
-        if (!r.ok) continue;
-        const page = (await r.json()) as unknown;
-        const before = items.length;
-        collectItems(page, items, seen);
-        if (items.length > before) queue.unshift(...findContinuations(page));
-      } catch { /* try next token */ }
+      const page = await browse({ continuation: token });
+      if (!page) continue;
+      const before = items.length;
+      collectItems(page, items, seen);
+      if (items.length > before) queue.unshift(...findContinuations(page));
     }
     return { playlistId, items };
   });
